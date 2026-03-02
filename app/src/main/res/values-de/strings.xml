@@ -387,7 +387,7 @@
     <string name="light_theme">Helles Thema</string>
     <string name="theme_title">Thema</string>
     <string name="remote_folder_picker_title">Ordnerauswahl</string>
-    <string name="logFragment">Logs</string>
+    <string name="logFragment">Synchronisierungslogs</string>
     <string name="send_logs">Protokolle senden</string>
     <string name="clear_logs">Protokolle löschen</string>
     <string name="logs_cleared">Protokolle gelöscht</string>

@@ -422,7 +422,7 @@
     <string name="light_theme">明亮主题</string>
     <string name="theme_title">主题</string>
     <string name="remote_folder_picker_title">文件夹选取器</string>
-    <string name="logFragment">日志</string>
+    <string name="logFragment">同步日志</string>
     <string name="alarm_while_idle">允许在设备进入待机状态(idle)时运行任务</string>
     <string name="alarm_while_idle_summary">可能会消耗更多电池，但禁用可能会导致严重延迟。</string>
     <string name="task_data_validation_error_no_local_path">您尚未选择本地路径</string>

@@ -449,7 +449,7 @@
     <string name="light_theme">Tema clar</string>
     <string name="theme_title">Tema</string>
     <string name="remote_folder_picker_title">Tria de carpeta</string>
-    <string name="logFragment">Registres</string>
+    <string name="logFragment">Registres de sincronització</string>
     <string name="send_logs">Envia els registres</string>
     <string name="clear_logs">Buida els registres</string>
     <string name="logs_cleared">Registres buidats</string>

@@ -474,7 +474,7 @@
     <string name="light_theme">Light Mode</string>
     <string name="theme_title">Theme</string>
     <string name="remote_folder_picker_title">Folder picker</string>
-    <string name="logFragment">Logs</string>
+    <string name="logFragment">Synchronization logs</string>
     <string name="alarm_while_idle">Allow tasks to run when the device is idle</string>
     <string name="alarm_while_idle_summary">May consume more battery, but disabled can cause heavy delays.</string>
     <string name="task_data_validation_error_no_local_path">You have not selected a local path yet</string>
