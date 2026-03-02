@@ -399,6 +399,9 @@
     <string name="log_upload_success">Protokolle hochgeladen</string>
     <string name="log_upload_failed">Upload der Protokolle fehlgeschlagen</string>
     <string name="not_set">Nicht festgelegt</string>
+    <string name="clear_thumbnail_cache">Cache löschen</string>
+    <string name="thumbnail_cache_cleared">Thumbnail-Cache gelöscht</string>
+    <string name="confirm_clear_thumbnail_cache_message">Dies löscht alle zwischengespeicherten Thumbnails. Sie werden beim Durchsuchen von Dateien erneut heruntergeladen. Fortfahren?</string>
     <string name="alarm_while_idle">Erlaube Aufgaben wenn das Gerät im Schlafmodus ist</string>
     <string name="alarm_while_idle_summary">Dies kann mehr Akku verbrauchen da das Gerät extra aufwachen muss. Falls verboten können Aufgaben sehr verspätet starten</string>
     <string name="old_maintainer">Alter Maintainer</string>

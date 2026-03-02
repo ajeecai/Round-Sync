@@ -243,6 +243,9 @@
     <string name="log_upload_success">日志上传成功</string>
     <string name="log_upload_failed">日志上传失败</string>
     <string name="not_set">未设置</string>
+    <string name="clear_thumbnail_cache">清除缓存</string>
+    <string name="thumbnail_cache_cleared">缩略图缓存已清除</string>
+    <string name="confirm_clear_thumbnail_cache_message">这将清除所有已缓存的缩略图，浏览文件时会重新下载。是否继续？</string>
     <string name="file_access_settings_icon_content_description">文件访问设置图标</string>
     <string name="hidden_remotes">隐藏远端</string>
     <string name="select_remotes_to_hide">选择要隐藏的远端</string>

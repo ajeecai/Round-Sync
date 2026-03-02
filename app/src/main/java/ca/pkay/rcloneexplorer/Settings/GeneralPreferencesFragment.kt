@@ -17,8 +17,10 @@ import ca.pkay.rcloneexplorer.Items.RemoteItem
 import ca.pkay.rcloneexplorer.R
 import ca.pkay.rcloneexplorer.Rclone
 import ca.pkay.rcloneexplorer.util.FLog
+import com.bumptech.glide.Glide
 import de.felixnuesse.extract.extensions.TAG
 import de.felixnuesse.extract.settings.language.LanguagePicker
+import de.felixnuesse.extract.settings.preferences.ButtonPreference
 import de.felixnuesse.extract.settings.preferences.FilesizePreference
 import es.dmoral.toasty.Toasty
 
@@ -57,6 +59,46 @@ class GeneralPreferencesFragment : PreferenceFragmentCompat() {
             true
         }
 
+        val clearCachePreference = findPreference("pref_key_clear_thumbnail_cache") as ButtonPreference?
+        clearCachePreference?.setButtonText(getString(R.string.clear_thumbnail_cache))
+        clearCachePreference?.setButtonOnClick {
+            confirmClearThumbnailCache()
+        }
+
+    }
+
+    private fun confirmClearThumbnailCache() {
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.clear_thumbnail_cache)
+            .setMessage(R.string.confirm_clear_thumbnail_cache_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ -> clearThumbnailCache() }
+            .show()
+    }
+
+    private fun clearThumbnailCache() {
+        try {
+            // Clear both memory and disk cache
+            Glide.get(requireContext()).clearMemory()
+
+            // Clear disk cache in background thread
+            Thread {
+                try {
+                    Glide.get(requireContext()).clearDiskCache()
+                    requireActivity().runOnUiThread {
+                        Toast.makeText(context, getString(R.string.thumbnail_cache_cleared), Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    FLog.e(TAG(), "clearThumbnailCache: error clearing disk cache", e)
+                    requireActivity().runOnUiThread {
+                        Toast.makeText(context, "Failed to clear disk cache", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.start()
+        } catch (e: Exception) {
+            FLog.e(TAG(), "clearThumbnailCache: error", e)
+            Toast.makeText(context, "Failed to clear cache", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showThumbnailSizeDialog(preference: Preference) {

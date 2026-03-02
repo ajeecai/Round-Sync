@@ -461,6 +461,9 @@
     <string name="log_upload_success">Registres carregats</string>
     <string name="log_upload_failed">Error en carregar els registres</string>
     <string name="not_set">No establert</string>
+    <string name="clear_thumbnail_cache">Esborra la memòria cau</string>
+    <string name="thumbnail_cache_cleared">Memòria cau de miniatures esborrada</string>
+    <string name="confirm_clear_thumbnail_cache_message">Això esborrarà totes les miniatures emmagatzemades a la memòria cau. Es tornaran a baixar en navegar pels fitxers. Vols continuar?</string>
     <string name="alarm_while_idle">Permet que es realitzen les tasques amb el dispositiu inactiu</string>
     <string name="alarm_while_idle_summary">Això consumirà més bateria, però si l\'inhabilites es poden produir grans retards.</string>
     <string name="task_data_validation_error_no_local_path">Encara no has triat cap camí local</string>

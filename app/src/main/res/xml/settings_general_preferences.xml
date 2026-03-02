@@ -23,6 +23,10 @@
             android:title="@string/pref_thumbnails_dlg_title"
             app:dependency="@string/pref_key_show_thumbnails" />
 
+        <de.felixnuesse.extract.settings.preferences.ButtonPreference
+            android:key="pref_key_clear_thumbnail_cache"
+            android:title="@string/clear_thumbnail_cache" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/preference_category_header_background_work">
