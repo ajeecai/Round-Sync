@@ -27,8 +27,7 @@
             android:title="@string/pref_log_upload_pass_title"
             android:defaultValue=""
             android:inputType="textPassword"
-            android:password="true"
-            app:useSimpleSummaryProvider="true" />
+            app:useSimpleSummaryProvider="false" />
 
         <de.felixnuesse.extract.settings.preferences.ButtonPreference
             android:key="pref_key_clear_logs"

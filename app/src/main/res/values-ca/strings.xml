@@ -460,6 +460,7 @@
     <string name="pref_log_upload_pass_title">Contrasenya per carregar registres</string>
     <string name="log_upload_success">Registres carregats</string>
     <string name="log_upload_failed">Error en carregar els registres</string>
+    <string name="not_set">No establert</string>
     <string name="alarm_while_idle">Permet que es realitzen les tasques amb el dispositiu inactiu</string>
     <string name="alarm_while_idle_summary">Això consumirà més bateria, però si l\'inhabilites es poden produir grans retards.</string>
     <string name="task_data_validation_error_no_local_path">Encara no has triat cap camí local</string>

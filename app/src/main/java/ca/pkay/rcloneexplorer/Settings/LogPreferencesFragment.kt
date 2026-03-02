@@ -3,7 +3,9 @@ package ca.pkay.rcloneexplorer.Settings
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Process
+import android.text.InputType
 import android.widget.Toast
+import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceManager
@@ -35,6 +37,24 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
         val clearLogs = findPreference<Preference>("pref_key_clear_logs") as ButtonPreference
         clearLogs.setButtonText(getString(R.string.clear_logs))
         clearLogs.setButtonOnClick { confirmClearLogs() }
+
+        // Set up password field to hide actual value in summary and input
+        val passwordPref = findPreference<EditTextPreference>(getString(R.string.pref_key_log_upload_password))
+        passwordPref?.apply {
+            // Hide password in summary
+            summaryProvider = Preference.SummaryProvider<EditTextPreference> { preference ->
+                val password = preference.text
+                if (password.isNullOrEmpty()) {
+                    getString(R.string.not_set)
+                } else {
+                    "••••••••"
+                }
+            }
+            // Hide password in input dialog
+            setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            }
+        }
 
     }
 

@@ -632,6 +632,7 @@
     <string name="pref_log_upload_pass_title">Log upload password</string>
     <string name="log_upload_success">Logs uploaded</string>
     <string name="log_upload_failed">Failed to upload logs</string>
+    <string name="not_set">Not set</string>
     <string name="intro_update_checks_title">Update Notifications</string>
     <string name="intro_update_checks_description">If you want to recieve updates, you can enable the switch below! We will notify if an update is available, and you can then choose to apply it.</string>
 </resources>
