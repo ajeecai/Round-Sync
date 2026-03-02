@@ -223,11 +223,25 @@
     <string name="worker_download_cancelled">下载已取消</string>
     <string name="wifi_connections_isnt_available">Wi-Fi 连接不可用</string>
     <string name="worker_upload_cancelled">上传已取消</string>
-    <string name="logging_settings_header">错误日志</string>
+    <string name="logging_settings_header">日志设置</string>
     <string name="look_and_feel_settings_icon_content_description">外观设置图标</string>
     <string name="general_settings_icon_content_description">常规设置图标</string>
     <string name="notification_settings_icon_content_description">通知设置图标</string>
     <string name="logging_settings_icon_content_description">日志记录设置图标</string>
+    <!-- Logging category title override -->
+    <string name="preference_category_header_logging">日志设置</string>
+    <!-- Log upload and maintenance -->
+    <string name="send_logs">发送日志</string>
+    <string name="clear_logs">清除日志</string>
+    <string name="logs_cleared">已清除日志</string>
+    <string name="confirm_clear_logs_message">这将删除所有已有的日志文件，是否继续？</string>
+    <string name="uploading_logs">正在上传日志…</string>
+    <string name="sync_logs">同步日志</string>
+    <string name="pref_log_upload_url_title">日志上传服务器 URL</string>
+    <string name="pref_log_upload_user_title">日志上传用户名</string>
+    <string name="pref_log_upload_pass_title">日志上传密码</string>
+    <string name="log_upload_success">日志上传成功</string>
+    <string name="log_upload_failed">日志上传失败</string>
     <string name="file_access_settings_icon_content_description">文件访问设置图标</string>
     <string name="hidden_remotes">隐藏远端</string>
     <string name="select_remotes_to_hide">选择要隐藏的远端</string>

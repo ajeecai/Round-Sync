@@ -450,6 +450,16 @@
     <string name="theme_title">Tema</string>
     <string name="remote_folder_picker_title">Tria de carpeta</string>
     <string name="logFragment">Registres</string>
+    <string name="send_logs">Envia els registres</string>
+    <string name="clear_logs">Buida els registres</string>
+    <string name="logs_cleared">Registres buidats</string>
+    <string name="confirm_clear_logs_message">Això esborrarà tots els fitxers de registre existents. Vols continuar?</string>
+    <string name="uploading_logs">S\'estan carregant els registres…</string>
+    <string name="pref_log_upload_url_title">URL del servidor per carregar registres</string>
+    <string name="pref_log_upload_user_title">Nom d\'usuari per carregar registres</string>
+    <string name="pref_log_upload_pass_title">Contrasenya per carregar registres</string>
+    <string name="log_upload_success">Registres carregats</string>
+    <string name="log_upload_failed">Error en carregar els registres</string>
     <string name="alarm_while_idle">Permet que es realitzen les tasques amb el dispositiu inactiu</string>
     <string name="alarm_while_idle_summary">Això consumirà més bateria, però si l\'inhabilites es poden produir grans retards.</string>
     <string name="task_data_validation_error_no_local_path">Encara no has triat cap camí local</string>

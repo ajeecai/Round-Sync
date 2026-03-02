@@ -618,8 +618,20 @@
     <string name="preference_category_header_rclone">Rclone</string>
     <string name="preference_category_header_updates">Updates</string>
     <string name="preference_category_header_reports">Reports</string>
+    <string name="preference_category_header_log_upload">Log Upload</string>
     <string name="pref_proxy_user">Username</string>
     <string name="pref_proxy_password">Password</string>
+    <string name="send_logs">Send logs</string>
+    <string name="clear_logs">Clear logs</string>
+    <string name="logs_cleared">Logs cleared</string>
+    <string name="confirm_clear_logs_message">This will delete all existing log files. Continue?</string>
+    <string name="uploading_logs">Uploading logs…</string>
+    <string name="sync_logs">Synchronization logs</string>
+    <string name="pref_log_upload_url_title">Log upload server URL</string>
+    <string name="pref_log_upload_user_title">Log upload username</string>
+    <string name="pref_log_upload_pass_title">Log upload password</string>
+    <string name="log_upload_success">Logs uploaded</string>
+    <string name="log_upload_failed">Failed to upload logs</string>
     <string name="intro_update_checks_title">Update Notifications</string>
     <string name="intro_update_checks_description">If you want to recieve updates, you can enable the switch below! We will notify if an update is available, and you can then choose to apply it.</string>
 </resources>

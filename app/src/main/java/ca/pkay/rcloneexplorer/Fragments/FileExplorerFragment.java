@@ -99,6 +99,9 @@ import java9.util.stream.StreamSupport;
 import jp.wasabeef.recyclerview.animators.LandingAnimator;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
+import okhttp3.Credentials;
+import okhttp3.MediaType;
+import okhttp3.RequestBody;
 import okhttp3.Response;
 
 public class FileExplorerFragment extends Fragment implements   FileExplorerRecyclerViewAdapter.OnClickListener,
@@ -653,6 +656,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 return true;
             case R.id.action_go_to:
                 showSFTPgoToDialog();
+                return true;
+            case R.id.action_send_logs:
+                sendLogs();
                 return true;
             case android.R.id.home:
                 if (isInMoveMode) {
@@ -1608,6 +1614,72 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             editor.putBoolean(getString(R.string.pref_key_go_to_default_set), false);
         }
         editor.apply();
+    }
+
+    private void sendLogs() {
+        LoadingDialog loadingDialog = new LoadingDialog()
+                .setCanCancel(false)
+                .setTitle(getString(R.string.uploading_logs));
+        if (getFragmentManager() != null) {
+            loadingDialog.show(getChildFragmentManager(), "uploading logs");
+        }
+        new AsyncTask<Void, Void, Boolean>() {
+            @Override
+            protected Boolean doInBackground(Void... voids) {
+                try {
+                    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                    String urlBase = prefs.getString(getString(R.string.pref_key_log_upload_url), "");
+                    String user = prefs.getString(getString(R.string.pref_key_log_upload_username), "");
+                    String pass = prefs.getString(getString(R.string.pref_key_log_upload_password), "");
+                    if (urlBase == null || urlBase.isEmpty()) return false;
+                    if (!urlBase.endsWith("/")) urlBase += "/";
+                    String androidId = android.provider.Settings.Secure.getString(context.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+                    String fileName = "log-" + androidId + ".txt";
+                    java.io.File logsDir = context.getExternalFilesDir("logs");
+                    if (logsDir == null || !logsDir.exists()) return false;
+                    StringBuilder sb = new StringBuilder();
+                    java.io.File[] files = logsDir.listFiles();
+                    if (files == null || files.length == 0) return false;
+                    for (java.io.File f : files) {
+                        if (!f.isFile()) continue;
+                        sb.append("===== ").append(f.getName()).append(" =====\n");
+                        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
+                            String line;
+                            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                        }
+                        sb.append("\n\n");
+                    }
+                    byte[] payload = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    String url = urlBase + "log-" + androidId + ".txt";
+
+                    OkHttpClient client = new OkHttpClient.Builder().build();
+                    MediaType mt = MediaType.parse("text/plain; charset=utf-8");
+                    RequestBody body = RequestBody.create(mt, payload);
+                        Request.Builder rb = new Request.Builder()
+                            .url(url)
+                            .put(body)
+                            .addHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+                    if (user != null && !user.isEmpty()) {
+                        rb.addHeader("Authorization", Credentials.basic(user, pass == null ? "" : pass));
+                    }
+                    Response resp = client.newCall(rb.build()).execute();
+                    boolean ok = resp.isSuccessful();
+                    resp.close();
+                    return ok;
+                } catch (Exception e) {
+                    FLog.e(TAG, "sendLogs: upload failed", e);
+                    return false;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(Boolean success) {
+                Dialogs.dismissSilently(loadingDialog);
+                android.widget.Toast.makeText(context,
+                        success ? R.string.log_upload_success : R.string.log_upload_failed,
+                        android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }.execute();
     }
 
     /***********************************************************************************************

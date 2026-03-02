@@ -9,6 +9,30 @@
             android:key="@string/pref_key_logs"
             android:title="@string/use_logs"
             app:summary="@string/use_logs_summary" />
+
+        <EditTextPreference
+            android:key="@string/pref_key_log_upload_url"
+            android:title="@string/pref_log_upload_url_title"
+            android:defaultValue="https://example.com"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:key="@string/pref_key_log_upload_username"
+            android:title="@string/pref_log_upload_user_title"
+            android:defaultValue=""
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:key="@string/pref_key_log_upload_password"
+            android:title="@string/pref_log_upload_pass_title"
+            android:defaultValue=""
+            android:inputType="textPassword"
+            android:password="true"
+            app:useSimpleSummaryProvider="true" />
+
+        <de.felixnuesse.extract.settings.preferences.ButtonPreference
+            android:key="pref_key_clear_logs"
+            android:title="@string/clear_logs" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/preference_category_header_rclone">

@@ -32,6 +32,10 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
             sigquitAll()
         }
 
+        val clearLogs = findPreference<Preference>("pref_key_clear_logs") as ButtonPreference
+        clearLogs.setButtonText(getString(R.string.clear_logs))
+        clearLogs.setButtonOnClick { confirmClearLogs() }
+
     }
 
 
@@ -67,6 +71,29 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
             FLog.e(tag(), "Error executing shell commands", e)
         } catch (e: InterruptedException) {
             FLog.e(tag(), "Error executing shell commands", e)
+        }
+    }
+    private fun confirmClearLogs() {
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(R.string.clear_logs)
+            .setMessage(R.string.confirm_clear_logs_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(android.R.string.ok) { _, _ -> clearLogFiles() }
+            .show()
+    }
+
+    private fun clearLogFiles() {
+        try {
+            val dir = requireContext().getExternalFilesDir("logs")
+            if (dir != null && dir.exists()) {
+                dir.listFiles()?.forEach { f ->
+                    try { if (f.isFile) f.delete() } catch (_: Exception) {}
+                }
+            }
+            Toast.makeText(context, getString(R.string.logs_cleared), Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            FLog.e(tag(), "clearLogFiles: error", e)
+            Toast.makeText(context, getString(R.string.log_upload_failed), Toast.LENGTH_SHORT).show()
         }
     }
 }
