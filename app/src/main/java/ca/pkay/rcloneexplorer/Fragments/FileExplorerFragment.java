@@ -1638,17 +1638,46 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     java.io.File logsDir = context.getExternalFilesDir("logs");
                     if (logsDir == null || !logsDir.exists()) return false;
                     StringBuilder sb = new StringBuilder();
+
+                    // Collect rclone log files
                     java.io.File[] files = logsDir.listFiles();
-                    if (files == null || files.length == 0) return false;
-                    for (java.io.File f : files) {
-                        if (!f.isFile()) continue;
-                        sb.append("===== ").append(f.getName()).append(" =====\n");
-                        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
-                            String line;
-                            while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                    if (files != null && files.length > 0) {
+                        for (java.io.File f : files) {
+                            if (!f.isFile()) continue;
+                            sb.append("===== ").append(f.getName()).append(" =====\n");
+                            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
+                                String line;
+                                while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                            }
+                            sb.append("\n\n");
                         }
-                        sb.append("\n\n");
                     }
+
+                    // Collect Android application logcat
+                    sb.append("===== android_logcat.txt =====\n");
+                    try {
+                        Process logcatProcess = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "threadtime"});
+                        java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(logcatProcess.getInputStream()));
+                        String line;
+                        String packageName = context.getPackageName();
+                        while ((line = reader.readLine()) != null) {
+                            // Include lines that mention our app or important components
+                            if (line.contains(packageName) ||
+                                line.contains("ThumbnailsLoadingSvc") ||
+                                line.contains("FileExplorerRecyclerViewAdapter") ||
+                                line.contains("Glide") ||
+                                line.contains("rclone")) {
+                                sb.append(line).append('\n');
+                            }
+                        }
+                        reader.close();
+                        logcatProcess.waitFor();
+                    } catch (Exception e) {
+                        sb.append("Failed to collect logcat: ").append(e.getMessage()).append('\n');
+                    }
+                    sb.append("\n\n");
+
+                    if (sb.length() == 0) return false;
                     byte[] payload = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
                     String url = urlBase + "log-" + androidId + ".txt";
 
