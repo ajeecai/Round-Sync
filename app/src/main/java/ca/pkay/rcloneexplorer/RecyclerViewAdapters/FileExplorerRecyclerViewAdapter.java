@@ -88,6 +88,9 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
     public void onBindViewHolder(@NonNull final ViewHolder holder, int position) {
         final FileItem item = files.get(position);
 
+        // Cancel any pending Glide request for this holder to prevent loading wrong thumbnails
+        Glide.with(context).clear(holder.fileIcon);
+
         holder.fileItem = item;
         if (item.isDir()) {
             holder.dirIcon.setVisibility(View.VISIBLE);
@@ -103,7 +106,6 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
         }
 
         if (showThumbnails && !item.isDir()) {
-            String server = "http://127.0.0.1:29179/";
             boolean localLoad = item.getRemote().getType() == RemoteItem.SAFW;
             String mimeType = item.getMimeType();
             if ((mimeType.startsWith("image/") || mimeType.startsWith("video/")) && item.getSize() <= sizeLimit) {
@@ -112,7 +114,8 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                 RequestOptions glideOption = new RequestOptions()
                         .centerCrop()
                         .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .placeholder(R.drawable.ic_file);
+                        .placeholder(R.drawable.ic_file)
+                        .timeout(10000);
                 if(localLoad) {
                     bindSafFile(holder, item, glideOption);
                 } else {
@@ -120,14 +123,33 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                     String hiddenPath = serverParams[0];
                     int serverPort = Integer.parseInt(serverParams[1]);
                     String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath + '/' + item.getPath();
+                    FLog.d(TAG, "onBindViewHolder: loading thumbnail from url=%s for file=%s", url, item.getName());
                     Glide
                             .with(context)
                             .load(new PersistentGlideUrl(url))
                             .apply(glideOption)
-                            .thumbnail(0.1f)
+                            .addListener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+                                @Override
+                                public boolean onLoadFailed(@androidx.annotation.Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                                    FLog.w(TAG, "onBindViewHolder: thumbnail load failed for %s from %s", item.getName(), url);
+                                    if (e != null) {
+                                        FLog.w(TAG, "onBindViewHolder: glide error: %s", e.getMessage());
+                                    }
+                                    holder.fileIcon.setImageResource(R.drawable.ic_file);
+                                    return false;
+                                }
+
+                                @Override
+                                public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                                    // Check if holder has been recycled for a different item
+                                    if (holder.fileItem != item) {
+                                        return true; // Don't apply the loaded image
+                                    }
+                                    return false;
+                                }
+                            })
                             .into(holder.fileIcon);
                 }
-
             } else {
                 holder.fileIcon.setImageResource(R.drawable.ic_file);
             }
