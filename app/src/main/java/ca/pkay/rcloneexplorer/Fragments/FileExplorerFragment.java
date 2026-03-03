@@ -1665,6 +1665,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             if (line.contains(packageName) ||
                                 line.contains("ThumbnailsLoadingSvc") ||
                                 line.contains("FileExplorerRecyclerViewAdapter") ||
+                                line.contains("FileExplorerRVA") ||
                                 line.contains("Glide") ||
                                 line.contains("rclone")) {
                                 sb.append(line).append('\n');
