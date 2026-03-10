@@ -390,6 +390,11 @@
     <string name="logFragment">Synchronisierungslogs</string>
     <string name="send_logs">Protokolle senden</string>
     <string name="clear_logs">Protokolle löschen</string>
+    <string name="export_logs">Lokal exportieren</string>
+    <string name="export_logs_success">Protokolle exportiert: %s</string>
+    <string name="export_logs_failed">Export der Protokolle fehlgeschlagen</string>
+    <string name="view">Ansehen</string>
+    <string name="open_with">Öffnen mit</string>
     <string name="logs_cleared">Protokolle gelöscht</string>
     <string name="confirm_clear_logs_message">Dadurch werden alle vorhandenen Protokolldateien gelöscht. Fortfahren?</string>
     <string name="uploading_logs">Protokolle werden hochgeladen…</string>

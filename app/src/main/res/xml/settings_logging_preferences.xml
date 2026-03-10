@@ -30,6 +30,11 @@
             app:useSimpleSummaryProvider="false" />
 
         <de.felixnuesse.extract.settings.preferences.ButtonPreference
+            android:key="pref_key_export_logs"
+            android:title="@string/export_logs"
+            />
+
+        <de.felixnuesse.extract.settings.preferences.ButtonPreference
             android:key="pref_key_clear_logs"
             android:title="@string/clear_logs" />
     </PreferenceCategory>

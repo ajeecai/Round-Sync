@@ -232,6 +232,11 @@
     <string name="preference_category_header_logging">日志设置</string>
     <!-- Log upload and maintenance -->
     <string name="send_logs">发送日志</string>
+    <string name="export_logs">导出到本地</string>
+    <string name="export_logs_success">日志已导出: %s</string>
+    <string name="export_logs_failed">导出日志失败</string>
+    <string name="open_with">打开方式</string>
+    <string name="view">查看</string>
     <string name="clear_logs">清除日志</string>
     <string name="logs_cleared">已清除日志</string>
     <string name="confirm_clear_logs_message">这将删除所有已有的日志文件，是否继续？</string>

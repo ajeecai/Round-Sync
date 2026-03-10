@@ -452,6 +452,11 @@
     <string name="logFragment">Registres de sincronització</string>
     <string name="send_logs">Envia els registres</string>
     <string name="clear_logs">Buida els registres</string>
+    <string name="export_logs">Exportar localment</string>
+    <string name="export_logs_success">Registres exportats: %s</string>
+    <string name="export_logs_failed">No ha estat possible exportar els registres</string>
+    <string name="view">Veure</string>
+    <string name="open_with">Obre amb</string>
     <string name="logs_cleared">Registres buidats</string>
     <string name="confirm_clear_logs_message">Això esborrarà tots els fitxers de registre existents. Vols continuar?</string>
     <string name="uploading_logs">S\'estan carregant els registres…</string>

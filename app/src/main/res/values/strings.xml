@@ -623,6 +623,11 @@
     <string name="pref_proxy_password">Password</string>
     <string name="send_logs">Send logs</string>
     <string name="clear_logs">Clear logs</string>
+    <string name="export_logs">Export to local</string>
+    <string name="export_logs_success">Logs exported to: %s</string>
+    <string name="export_logs_failed">Failed to export logs</string>
+    <string name="view">View</string>
+    <string name="open_with">Open with</string>
     <string name="logs_cleared">Logs cleared</string>
     <string name="confirm_clear_logs_message">This will delete all existing log files. Continue?</string>
     <string name="clear_thumbnail_cache">Clear cache</string>
