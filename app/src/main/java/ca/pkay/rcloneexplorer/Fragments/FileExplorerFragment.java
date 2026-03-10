@@ -1637,54 +1637,75 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     String fileName = "log-" + androidId + ".txt";
                     java.io.File logsDir = context.getExternalFilesDir("logs");
                     if (logsDir == null || !logsDir.exists()) return false;
-                    StringBuilder sb = new StringBuilder();
-
-                    // Collect rclone log files
+                    
+                    String url = urlBase + "log-" + androidId + ".txt";
+                    
+                    // Use streaming RequestBody to avoid loading all logs into memory
+                    RequestBody body = new RequestBody() {
+                        @Override
+                        public MediaType contentType() {
+                            return MediaType.parse("text/plain; charset=utf-8");
+                        }
+                        
+                        @Override
+                        public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
+                            // Write rclone log files - stream directly from files
                     java.io.File[] files = logsDir.listFiles();
                     if (files != null && files.length > 0) {
                         for (java.io.File f : files) {
                             if (!f.isFile()) continue;
-                            sb.append("===== ").append(f.getName()).append(" =====\n");
+                                    sink.writeUtf8("===== " + f.getName() + " =====\n");
                             try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
                                 String line;
-                                while ((line = r.readLine()) != null) sb.append(line).append('\n');
+                                        while ((line = r.readLine()) != null) {
+                                            sink.writeUtf8(line);
+                                            sink.writeUtf8("\n");
                             }
-                            sb.append("\n\n");
+                                    }
+                                    sink.writeUtf8("\n\n");
                         }
                     }
 
-                    // Collect Android application logcat
-                    sb.append("===== android_logcat.txt =====\n");
+                            // Write Android logcat - stream directly from process output
+                            sink.writeUtf8("===== android_logcat.txt =====\n");
                     try {
-                        Process logcatProcess = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "threadtime"});
+                                Process logcatProcess = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "threadtime"});
                         java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(logcatProcess.getInputStream()));
                         String line;
                         String packageName = context.getPackageName();
                         while ((line = reader.readLine()) != null) {
-                            // Include lines that mention our app or important components
-                            if (line.contains(packageName) ||
-                                line.contains("ThumbnailsLoadingSvc") ||
-                                line.contains("FileExplorerRecyclerViewAdapter") ||
-                                line.contains("FileExplorerRVA") ||
-                                line.contains("Glide") ||
-                                line.contains("rclone")) {
-                                sb.append(line).append('\n');
+                                    // Filter for relevant logs using centralized filter
+                                    if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName)) {
+                                        sink.writeUtf8(line);
+                                        sink.writeUtf8("\n");
                             }
                         }
                         reader.close();
-                        logcatProcess.waitFor();
+                                // Wait for logcat process to finish, with timeout
+                                if (!logcatProcess.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                                    logcatProcess.destroy();
+                                    sink.writeUtf8("... (logcat collection timeout)\n");
+                                }
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new java.io.IOException("Log collection interrupted", e);
+                            } catch (java.io.IOException e) {
+                                // Network error - rethrow to let caller know
+                                throw e;
                     } catch (Exception e) {
-                        sb.append("Failed to collect logcat: ").append(e.getMessage()).append('\n');
-                    }
-                    sb.append("\n\n");
+                                // Non-IO error (e.g. logcat command failed) - log and continue
+                                try {
+                                    sink.writeUtf8("Failed to collect logcat: " + e.getMessage() + "\n");
+                                } catch (java.io.IOException ioe) {
+                                    // Even writing error message failed - network is broken
+                                    throw ioe;
+                                }
+                            }
+                        }
+                    };
 
-                    if (sb.length() == 0) return false;
-                    byte[] payload = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                    String url = urlBase + "log-" + androidId + ".txt";
-
+                    // Use default OkHttpClient config (10s timeout for connect/read/write)
                     OkHttpClient client = new OkHttpClient.Builder().build();
-                    MediaType mt = MediaType.parse("text/plain; charset=utf-8");
-                    RequestBody body = RequestBody.create(mt, payload);
                         Request.Builder rb = new Request.Builder()
                             .url(url)
                             .put(body)
