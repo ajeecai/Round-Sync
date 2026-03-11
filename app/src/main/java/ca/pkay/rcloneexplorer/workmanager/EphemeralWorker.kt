@@ -17,7 +17,6 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import ca.pkay.rcloneexplorer.Items.FileItem
 import ca.pkay.rcloneexplorer.Items.RemoteItem
-import ca.pkay.rcloneexplorer.Log2File
 import ca.pkay.rcloneexplorer.R
 import ca.pkay.rcloneexplorer.Rclone
 import ca.pkay.rcloneexplorer.notifications.prototypes.WorkerNotification
@@ -66,10 +65,6 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
     // Objects
     private var mNotificationManager: WorkerNotification? = null
     private val mPreferences = PreferenceManager.getDefaultSharedPreferences(mContext)
-
-
-    private var log2File: Log2File? = null
-
 
     // States
     private val sIsLoggingEnabled = mPreferences.getBoolean(getString(R.string.pref_key_logs), false)
@@ -217,7 +212,7 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
                         //todo: migrate this to StatusObject, so that we can handle everything properly.
                         if (logline.getString("level") == "error") {
                             if (sIsLoggingEnabled) {
-                                log2File?.log(line)
+                                FLog.e(tag(), "Rclone error: %s", line)
                             }
                             statusObject.parseLoglineToStatusObject(logline)
                         } else if (logline.getString("level") == "warning") {

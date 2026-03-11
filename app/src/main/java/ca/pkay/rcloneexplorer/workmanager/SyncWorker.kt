@@ -16,7 +16,6 @@ import androidx.work.WorkerParameters
 import ca.pkay.rcloneexplorer.Database.DatabaseHandler
 import ca.pkay.rcloneexplorer.Items.RemoteItem
 import ca.pkay.rcloneexplorer.Items.Task
-import ca.pkay.rcloneexplorer.Log2File
 import ca.pkay.rcloneexplorer.R
 import ca.pkay.rcloneexplorer.Rclone
 import ca.pkay.rcloneexplorer.notifications.GenericSyncNotification
@@ -64,11 +63,6 @@ class SyncWorker (private var mContext: Context, workerParams: WorkerParameters)
     private var mDatabase = DatabaseHandler(mContext)
     private var mNotificationManager = SyncServiceNotifications(mContext)
     private val mPreferences = PreferenceManager.getDefaultSharedPreferences(mContext)
-
-
-    private var log2File: Log2File? = null
-
-
 
     // States
     private val sIsLoggingEnabled = mPreferences.getBoolean(getString(R.string.pref_key_logs), false)
@@ -186,7 +180,7 @@ class SyncWorker (private var mContext: Context, workerParams: WorkerParameters)
                         //todo: migrate this to StatusObject, so that we can handle everything properly.
                         if (logline.getString("level") == "error") {
                             if (sIsLoggingEnabled) {
-                                log2File?.log(line)
+                                FLog.e(TAG, "Rclone error: %s", line)
                             }
                             statusObject.parseLoglineToStatusObject(logline)
                         } else if (logline.getString("level") == "warning") {

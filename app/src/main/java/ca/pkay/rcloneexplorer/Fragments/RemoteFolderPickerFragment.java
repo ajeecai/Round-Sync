@@ -732,7 +732,7 @@ public class RemoteFolderPickerFragment extends Fragment implements   FileExplor
 
     @Override
     public void onBreadCrumbClicked(String path) {
-        Log.e("TAG", path);
+        FLog.d(TAG, "Breadcrumb clicked: %s", path);
         if (isSearchMode) {
             searchClicked();
         }

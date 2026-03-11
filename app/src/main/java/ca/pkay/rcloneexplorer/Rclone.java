@@ -74,13 +74,11 @@ public class Rclone {
     private Context context;
     private String rclone;
     private String rcloneConf;
-    private Log2File log2File;
 
     public Rclone(Context context) {
         this.context = context;
         this.rclone = context.getApplicationInfo().nativeLibraryDir + "/librclone.so";
         this.rcloneConf = context.getFilesDir().getPath() + "/rclone.conf";
-        log2File = new Log2File(context);
     }
 
     private String[] createCommand(ArrayList<String> args) {
@@ -228,7 +226,7 @@ public class Rclone {
             return;
         }
         String logOutput = stringBuilder.toString();
-        log2File.log(logOutput);
+        FLog.e(TAG, "Rclone error: %s", logOutput);
         SyncLog.error(context, "Rclone operation", logOutput);
     }
 
@@ -650,6 +648,16 @@ public class Rclone {
         boolean isLoggingEnabled = sharedPreferences.getBoolean(context.getString(R.string.pref_key_logs), false);
         if (isLoggingEnabled) {
             File serveLog = new File(context.getExternalFilesDir("logs"), "serve.log");
+
+            // Rotate log file if it exceeds 10MB to prevent storage exhaustion
+            if (serveLog.exists() && serveLog.length() > 10 * 1024 * 1024) {
+                File oldLog = new File(context.getExternalFilesDir("logs"), "serve.log.old");
+                if (oldLog.exists()) {
+                    oldLog.delete();  // Delete oldest log
+                }
+                serveLog.renameTo(oldLog);  // Keep one previous log
+            }
+
             params.add("--log-file");
             params.add(serveLog.getAbsolutePath());
         }
