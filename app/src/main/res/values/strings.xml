@@ -631,8 +631,8 @@
     <string name="logs_cleared">Logs cleared</string>
     <string name="confirm_clear_logs_message">This will delete all existing log files. Continue?</string>
     <string name="clear_thumbnail_cache">Clear cache</string>
-    <string name="thumbnail_cache_cleared">Thumbnail cache cleared</string>
-    <string name="confirm_clear_thumbnail_cache_message">This will clear all cached thumbnails. They will be re-downloaded when you browse files. Continue?</string>
+    <string name="thumbnail_cache_cleared">All cached thumbnails and full-size images cleared</string>
+    <string name="confirm_clear_thumbnail_cache_message">This will clear all cached thumbnails and full-size images. They will be re-downloaded when you browse files. Continue?</string>
     <string name="uploading_logs">Uploading logs…</string>
     <string name="sync_logs">Synchronization logs</string>
     <string name="pref_log_upload_url_title">Log upload server URL</string>

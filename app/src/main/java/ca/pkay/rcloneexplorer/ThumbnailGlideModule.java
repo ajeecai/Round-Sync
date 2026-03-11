@@ -11,24 +11,31 @@ import com.bumptech.glide.load.engine.cache.LruResourceCache;
 import com.bumptech.glide.module.AppGlideModule;
 
 /**
- * Custom Glide configuration for thumbnail caching.
+ * Custom Glide configuration for full image and thumbnail caching.
  *
  * Cache sizes:
- * - Disk cache: 500MB (for encrypted crypt thumbnails)
+ * - Disk cache: 1GB (stores original full images for both thumbnails and full viewing)
  * - Memory cache: 100MB (for quick scrolling performance)
  *
  * Cache strategy: LRU (Least Recently Used)
  * - Automatically evicts oldest accessed items when limit is reached
  * - More efficient than FIFO for typical usage patterns
+ *
+ * Design:
+ * - Glide serves as the ONLY image cache
+ * - Original images downloaded once and cached by Glide
+ * - Thumbnails generated on-the-fly from cached originals (fast, local operation)
+ * - Full image viewing also uses the same cached originals (zero re-download)
  */
 @GlideModule
 public class ThumbnailGlideModule extends AppGlideModule {
 
-    // Disk cache size: 500MB
-    private static final int DISK_CACHE_SIZE = 500 * 1024 * 1024;
+    // Disk cache size: 1GB (for full images + thumbnails)
+    // Use long to avoid int overflow (If set to 2GB = 2,147,483,648 > Integer.MAX_VALUE)
+    private static final long DISK_CACHE_SIZE = 1L * 1024 * 1024 * 1024;
 
     // Memory cache size: 100MB
-    private static final int MEMORY_CACHE_SIZE = 100 * 1024 * 1024;
+    private static final long MEMORY_CACHE_SIZE = 100L * 1024 * 1024;
 
     @Override
     public void applyOptions(@NonNull Context context, @NonNull GlideBuilder builder) {

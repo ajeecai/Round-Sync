@@ -84,6 +84,7 @@ import ca.pkay.rcloneexplorer.Items.SyncDirectionObject;
 import ca.pkay.rcloneexplorer.Items.Task;
 import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.Rclone;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.RecyclerViewAdapters.FileExplorerRecyclerViewAdapter;
 import ca.pkay.rcloneexplorer.Services.StreamingService;
 import ca.pkay.rcloneexplorer.Services.ThumbnailsLoadingService;
@@ -120,6 +121,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private static final int FILE_PICKER_UPLOAD_RESULT = 186;
     private static final int FILE_PICKER_DOWNLOAD_RESULT = 204;
     private static final int FILE_PICKER_SYNC_RESULT = 45;
+    private static final int PREFETCH_IMAGE_COUNT = 5; // Number of videos to prefetch before and after current video
+    private static final long VIDEO_PREFETCH_SIZE = 10L * 1024L * 1024L; // 10MB - amount to prefetch for videos via HTTP Range (rclone chunk cache)
+    private static final int STREAMING_SERVICE_PORT = 29180; // Fixed port for persistent streaming service
     private final String SAVED_PATH = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_PATH";
     private final String SAVED_CONTENT = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_CONTENT";
     private final String SAVED_SEARCH_MODE = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SEARCH_MODE";
@@ -282,6 +286,11 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
         RecyclerView recyclerView = view.findViewById(R.id.file_explorer_list);
         recyclerViewLinearLayoutManager = new LinearLayoutManager(context);
+
+        // Optimize scrolling performance with prefetch
+        recyclerView.setItemViewCacheSize(20); // Cache 20 ViewHolders (smooth back-scroll)
+        recyclerViewLinearLayoutManager.setInitialPrefetchItemCount(4); // Prefetch 4 items ahead
+
         recyclerView.setItemAnimator(new LandingAnimator());
         recyclerView.setLayoutManager(recyclerViewLinearLayoutManager);
         View emptyFolderView = view.findViewById(R.id.empty_folder_view);
@@ -362,6 +371,10 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             searchString = savedInstanceState.getString(SAVED_SEARCH_STRING);
             searchClicked();
         }
+
+        // Start video server for this remote (on-demand)
+        // This ensures the server serves the correct remote the user is browsing
+        ensureVideoServerRunning();
 
         isRunning = true;
         return view;
@@ -749,6 +762,38 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         isThumbnailsServiceRunning = true;
     }
 
+    /**
+     * Ensure video server is running for the current remote.
+     * Only starts/switches server if needed - doesn't restart if already serving correct remote.
+     */
+    private void ensureVideoServerRunning() {
+        if (remote == null || context == null) {
+            FLog.w(TAG, "ensureVideoServerRunning: remote or context is null, skipping");
+            return;
+        }
+
+        FLog.i(TAG, "ensureVideoServerRunning: checking server for remote: %s", remote.getName());
+
+        RcloneServerManager serverManager = RcloneServerManager.getInstance();
+
+        // Check if server is already serving this remote
+        if (serverManager.isServingRemote(remote.getName())) {
+            FLog.i(TAG, "ensureVideoServerRunning: server already serving remote: %s, no action needed", remote.getName());
+            return;
+        }
+
+        // Start/switch server to this remote in background thread
+        FLog.i(TAG, "ensureVideoServerRunning: starting server for remote: %s", remote.getName());
+        new Thread(() -> {
+            boolean success = serverManager.startServerForRemote(context, remote);
+            if (success) {
+                FLog.i(TAG, "ensureVideoServerRunning: successfully started server for remote: %s", remote.getName());
+            } else {
+                FLog.e(TAG, "ensureVideoServerRunning: failed to start server for remote: %s", remote.getName());
+            }
+        }).start();
+    }
+
     private void initializeThumbnailParams() {
         SecureRandom random = new SecureRandom();
         byte[] values = new byte[16];
@@ -815,11 +860,53 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     @Override
     public void onClickVideo(FileItem fileItem) {
         new StreamTask(StreamTask.OPEN_AS_VIDEO).execute(fileItem);
+
+        // Prefetch adjacent videos for smooth navigation
+        int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(fileItem);
+        prefetchAdjacentVideos(currentIndex);
     }
 
     @Override
     public void onClickImage(FileItem fileItem) {
-        new DownloadAndOpen(DownloadAndOpen.OPEN_AS_IMAGE).execute(fileItem);
+        // Check if thumbnail service is available (required for URL loading)
+        if (showThumbnails && isThumbnailsServiceRunning && thumbnailServerPort > 0) {
+            // URL loading approach: directly open MediaViewerActivity with URL
+            // Glide will load from URL and cache the original image automatically
+            FLog.d(TAG, String.format("onClickImage: opening %s with URL loading (port=%d)", fileItem.getName(), thumbnailServerPort));
+
+            String[] serverParams = getThumbnailServerParams();
+            String hiddenPath = serverParams[0];
+            int serverPort = Integer.parseInt(serverParams[1]);
+
+            // Note: Persistent video server is already started by MainActivity.onCreate()
+
+            Intent intent = new Intent(context, ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.class);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_PATH, fileItem.getPath());
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, serverPort);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+            // Server now serves root directory, so no need to pass current directory path
+
+            // Pass file list and current index for swipe navigation
+            if (directoryObject != null) {
+                java.util.List<FileItem> files = directoryObject.getDirectoryContent();
+                if (files != null && !files.isEmpty()) {
+                    int currentIndex = files.indexOf(fileItem);
+                    if (currentIndex >= 0) {
+                        intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
+                                new java.util.ArrayList<>(files));
+                        intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    }
+                }
+            }
+
+            ActivityHelper.tryStartActivity(context, intent);
+        } else {
+            // Fallback: download image first, then open (thumbnail service not available)
+            FLog.d(TAG, "onClickImage: thumbnail service not available, downloading %s first", fileItem.getName());
+            new DownloadAndOpen(DownloadAndOpen.OPEN_AS_IMAGE).execute(fileItem);
+        }
     }
 
     private void showFileProperties(FileItem fileItem) {
@@ -1108,6 +1195,10 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             isThumbnailsServiceRunning = false;
         }
 
+        // Note: We no longer stop the prefetch server here
+        // It should remain running across Activity transitions (e.g., opening MediaViewerActivity)
+        // The server will be cleaned up when the app process exits
+
         LocalBroadcastManager.getInstance(context).unregisterReceiver(backgroundTaskBroadcastReceiver);
     }
 
@@ -1181,11 +1272,56 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
     @Override
     public void onFileClicked(FileItem fileItem) {
+        FLog.i(TAG, "onFileClicked: file=%s, mimeType=%s", fileItem.getName(), fileItem.getMimeType());
+
         String type = fileItem.getMimeType();
         if (type.startsWith("video/") || type.startsWith("audio/")) {
+            FLog.i(TAG, "onFileClicked: VIDEO/AUDIO branch - calling StreamTask");
+
+            // Prefetch adjacent videos for smooth navigation
+            if (type.startsWith("video/")) {
+                int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(fileItem);
+                prefetchAdjacentVideos(currentIndex);
+            }
+
             // stream video or audio
             new StreamTask().execute(fileItem);
+        } else if (type.startsWith("image/") && showThumbnails && isThumbnailsServiceRunning && thumbnailServerPort > 0) {
+            FLog.i(TAG, "onFileClicked: IMAGE branch (thumbnails enabled) - direct URL loading with videoServerPort");
+            // For images, use URL-based loading when thumbnails are enabled
+            // This allows instant loading from Glide cache (same as thumbnails)
+            FLog.d(TAG, "onFileClicked: opening image %s with URL loading (port=%d)", fileItem.getName(), thumbnailServerPort);
+
+            String[] serverParams = getThumbnailServerParams();
+            String hiddenPath = serverParams[0];
+            int serverPort = Integer.parseInt(serverParams[1]);
+
+            // Note: Persistent video server is already started by MainActivity.onCreate()
+
+            Intent intent = new Intent(context, ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.class);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_PATH, fileItem.getPath());
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, serverPort);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+            // Server now serves root directory, so no need to pass current directory path
+
+            // Pass file list and current index for swipe navigation
+            if (directoryObject != null) {
+                java.util.List<FileItem> files = directoryObject.getDirectoryContent();
+                if (files != null && !files.isEmpty()) {
+                    int currentIndex = files.indexOf(fileItem);
+                    if (currentIndex >= 0) {
+                        intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
+                                new java.util.ArrayList<>(files));
+                        intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    }
+                }
+            }
+
+            ActivityHelper.tryStartActivity(context, intent);
         } else {
+            FLog.i(TAG, "onFileClicked: DOWNLOAD branch - calling DownloadAndOpen (thumbnails disabled or non-image)");
             // download and open
             new DownloadAndOpen().execute(fileItem);
         }
@@ -1570,6 +1706,204 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         startActivityForResult(intent, FILE_PICKER_UPLOAD_RESULT);
     }
 
+    /**
+     * Prewarm serve http's directory cache by sending a HEAD request to the first video file.
+     * This populates rclone's dir cache so subsequent video clicks don't trigger Google Drive API.
+     * Called after FetchDirectoryContent completes.
+     */
+    private void prewarmFirstVideoCache() {
+        if (recyclerViewAdapter == null) {
+            return;
+        }
+
+        RcloneServerManager serverManager = RcloneServerManager.getInstance();
+        if (!serverManager.isServerRunning()) {
+            return;
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Find the first video file in current directory
+                    List<FileItem> items = recyclerViewAdapter.getCurrentContent();
+                    FileItem firstVideo = null;
+                    for (FileItem item : items) {
+                        if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                            firstVideo = item;
+                            break;
+                        }
+                    }
+
+                    if (firstVideo == null) {
+                        FLog.d(TAG, "prewarmFirstVideoCache: no video files in directory");
+                        return;
+                    }
+
+                    // Build URL for the first video
+                    String remotePath = firstVideo.getPath();
+                    String remoteName = remote.getName();
+                    String urlPath;
+                    if (remotePath.startsWith("//" + remoteName + "/")) {
+                        urlPath = remotePath.substring(("//" + remoteName).length());
+                    } else if (remotePath.equals("//" + remoteName)) {
+                        urlPath = "/";
+                    } else {
+                        urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
+                    }
+
+                    String url = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + urlPath;
+                    FLog.i(TAG, "prewarmFirstVideoCache: sending HEAD to %s", firstVideo.getName());
+
+                    OkHttpClient client = new OkHttpClient.Builder()
+                            .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                            .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                            .build();
+
+                    Request request = new Request.Builder()
+                            .url(url)
+                            .head()
+                            .build();
+
+                    long startTime = System.currentTimeMillis();
+                    Response response = client.newCall(request).execute();
+                    long duration = System.currentTimeMillis() - startTime;
+
+                    if (response.isSuccessful()) {
+                        FLog.i(TAG, "prewarmFirstVideoCache: SUCCESS - dir cache warmed in %dms for %s",
+                               duration, firstVideo.getName());
+                    } else {
+                        FLog.w(TAG, "prewarmFirstVideoCache: HEAD returned %d for %s",
+                               response.code(), firstVideo.getName());
+                    }
+                    response.close();
+
+                } catch (Exception e) {
+                    FLog.e(TAG, "prewarmFirstVideoCache: error", e);
+                }
+            }
+        }).start();
+    }
+
+    /**
+     * Prefetch adjacent videos using HTTP Range requests to populate rclone's chunk cache.
+     * This allows for instant playback start when navigating to nearby videos.
+     * @param currentIndex Current video index in the file list
+     */
+    private void prefetchAdjacentVideos(final int currentIndex) {
+        if (currentIndex < 0 || recyclerViewAdapter == null) {
+            return;
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    long prefetchStartTime = System.currentTimeMillis();
+                    FLog.d(TAG, "prefetchAdjacentVideos: starting video prefetch at index=%d", currentIndex);
+
+                    // Find adjacent videos within PREFETCH_IMAGE_COUNT range
+                    ArrayList<FileItem> videosToPreload = new ArrayList<>();
+                    List<FileItem> allItems = recyclerViewAdapter.getCurrentContent();
+
+                    // Search backwards
+                    for (int i = currentIndex - 1; i >= 0 && videosToPreload.size() < PREFETCH_IMAGE_COUNT; i--) {
+                        FileItem item = allItems.get(i);
+                        if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                            videosToPreload.add(item);
+                        }
+                    }
+
+                    // Search forwards
+                    for (int i = currentIndex + 1; i < allItems.size() && videosToPreload.size() < PREFETCH_IMAGE_COUNT * 2; i++) {
+                        FileItem item = allItems.get(i);
+                        if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                            videosToPreload.add(item);
+                        }
+                    }
+
+                    if (videosToPreload.isEmpty()) {
+                        FLog.d(TAG, "prefetchAdjacentVideos: no videos to prefetch");
+                        return;
+                    }
+
+                    FLog.i(TAG, "prefetchAdjacentVideos: found %d videos to prefetch", videosToPreload.size());
+
+                    // Note: Persistent video server is already started by MainActivity.onCreate()
+
+                    // Prefetch each video using HTTP Range request
+                    OkHttpClient httpClient = new OkHttpClient.Builder()
+                            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                            .build();
+
+                    for (FileItem video : videosToPreload) {
+                        try {
+                            long videoStartTime = System.currentTimeMillis();
+
+                            // Build URL for video through rclone serve
+                            // Format: http://localhost:29180/[path]
+                            String remotePath = video.getPath();
+                            // Ensure path starts with / for proper URL format
+                            if (!remotePath.startsWith("/")) {
+                                remotePath = "/" + remotePath;
+                            }
+                            String url = "http://localhost:" + STREAMING_SERVICE_PORT + remotePath;
+
+                            // Calculate range size (min of VIDEO_PREFETCH_SIZE or actual file size)
+                            long rangeEnd = Math.min(VIDEO_PREFETCH_SIZE - 1, video.getSize() - 1);
+                            String rangeHeader = "bytes=0-" + rangeEnd;
+
+                            FLog.d(TAG, "prefetchAdjacentVideos: fetching %s (range=%s, size=%d MB)",
+                                   video.getName(), rangeHeader, video.getSize() / 1024 / 1024);
+
+                            Request request = new Request.Builder()
+                                    .url(url)
+                                    .header("Range", rangeHeader)
+                                    .build();
+
+                            Response response = httpClient.newCall(request).execute();
+
+                            if (response.isSuccessful() || response.code() == 206) { // 206 = Partial Content
+                                // Read the response body to trigger download
+                                long bytesRead = 0;
+                                if (response.body() != null) {
+                                    byte[] buffer = new byte[8192];
+                                    java.io.InputStream inputStream = response.body().byteStream();
+                                    int read;
+                                    while ((read = inputStream.read(buffer)) != -1) {
+                                        bytesRead += read;
+                                    }
+                                    inputStream.close();
+                                }
+
+                                long prefetchTime = System.currentTimeMillis() - videoStartTime;
+                                FLog.i(TAG, "prefetchAdjacentVideos: SUCCESS prefetched %s (%d KB in %d ms, %.2f KB/s)",
+                                       video.getName(), bytesRead / 1024, prefetchTime,
+                                       prefetchTime > 0 ? (bytesRead / 1024.0) / (prefetchTime / 1000.0) : 0);
+                            } else {
+                                FLog.w(TAG, "prefetchAdjacentVideos: HTTP error %d for %s",
+                                       response.code(), video.getName());
+                            }
+
+                            response.close();
+
+                        } catch (Exception e) {
+                            FLog.e(TAG, "prefetchAdjacentVideos: error prefetching %s", e, video.getName());
+                        }
+                    }
+
+                    long totalTime = System.currentTimeMillis() - prefetchStartTime;
+                    FLog.i(TAG, "prefetchAdjacentVideos: completed prefetch of %d videos in %d ms",
+                           videosToPreload.size(), totalTime);
+
+                } catch (Exception e) {
+                    FLog.e(TAG, "prefetchAdjacentVideos: error", e);
+                }
+            }
+        }).start();
+    }
+
     /*
      * Go To Dialog Callback
      */
@@ -1650,37 +1984,37 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         @Override
                         public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
                             // Write rclone log files - stream directly from files
-                    java.io.File[] files = logsDir.listFiles();
-                    if (files != null && files.length > 0) {
-                        for (java.io.File f : files) {
-                            if (!f.isFile()) continue;
+                            java.io.File[] files = logsDir.listFiles();
+                            if (files != null && files.length > 0) {
+                                for (java.io.File f : files) {
+                                    if (!f.isFile()) continue;
                                     sink.writeUtf8("===== " + f.getName() + " =====\n");
-                            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
-                                String line;
+                                    try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
+                                        String line;
                                         while ((line = r.readLine()) != null) {
                                             sink.writeUtf8(line);
                                             sink.writeUtf8("\n");
-                            }
+                                        }
                                     }
                                     sink.writeUtf8("\n\n");
-                        }
-                    }
-
+                                }
+                            }
+                            
                             // Write Android logcat - stream directly from process output
                             sink.writeUtf8("===== android_logcat.txt =====\n");
-                    try {
+                            try {
                                 Process logcatProcess = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "threadtime"});
-                        java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(logcatProcess.getInputStream()));
-                        String line;
-                        String packageName = context.getPackageName();
-                        while ((line = reader.readLine()) != null) {
+                                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(logcatProcess.getInputStream()));
+                                String line;
+                                String packageName = context.getPackageName();
+                                while ((line = reader.readLine()) != null) {
                                     // Filter for relevant logs using centralized filter
                                     if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName)) {
                                         sink.writeUtf8(line);
                                         sink.writeUtf8("\n");
-                            }
-                        }
-                        reader.close();
+                                    }
+                                }
+                                reader.close();
                                 // Wait for logcat process to finish, with timeout
                                 if (!logcatProcess.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
                                     logcatProcess.destroy();
@@ -1692,7 +2026,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             } catch (java.io.IOException e) {
                                 // Network error - rethrow to let caller know
                                 throw e;
-                    } catch (Exception e) {
+                            } catch (Exception e) {
                                 // Non-IO error (e.g. logcat command failed) - log and continue
                                 try {
                                     sink.writeUtf8("Failed to collect logcat: " + e.getMessage() + "\n");
@@ -1752,6 +2086,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            FLog.i(TAG, "FetchDirectoryContent/onPreExecute: starting");
 
             if (swipeRefreshLayout != null) {
                 swipeRefreshLayout.setRefreshing(true);
@@ -1760,14 +2095,22 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
         @Override
         protected List<FileItem> doInBackground(Void... voids) {
+            FLog.i(TAG, "FetchDirectoryContent/doInBackground: remote=%s, path=%s, startAtRoot=%b",
+                    remote.getName(), directoryObject.getCurrentPath(), startAtRoot);
             List<FileItem> fileItemList;
-            fileItemList = rclone.getDirectoryContent(remote, directoryObject.getCurrentPath(), startAtRoot);
+            try {
+                fileItemList = rclone.getDirectoryContent(remote, directoryObject.getCurrentPath(), startAtRoot);
+            } catch (Exception e) {
+                e.printStackTrace();
+                fileItemList = null;
+            }
             return fileItemList;
         }
 
         @Override
         protected void onPostExecute(List<FileItem> fileItems) {
             super.onPostExecute(fileItems);
+            FLog.i(TAG, "FetchDirectoryContent/onPostExecute: received %s items", fileItems != null ? String.valueOf(fileItems.size()) : "null");
             if (swipeRefreshLayout != null) {
                 swipeRefreshLayout.setRefreshing(false);
             }
@@ -1797,6 +2140,11 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     }
                 }
             }
+
+            // Prewarm serve http's dir cache by HEAD requesting the first video file
+            // operations/list and serve http use different dir caches even in the same process
+            // This eliminates the ~500ms Google Drive API delay on first video click
+            prewarmFirstVideoCache();
         }
 
         @Override
@@ -1905,6 +2253,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         private Process process;
         private volatile boolean isCancelled = false;
         private String mimeType;
+        private FileItem currentFileItem; // Store current file for prefetching
 
         DownloadAndOpen() {
             this(-1);
@@ -1940,17 +2289,21 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
         @Override
         protected Boolean doInBackground(FileItem... fileItems) {
-            FileItem fileItem = fileItems[0];
-            mimeType = fileItem.getMimeType();
+            currentFileItem = fileItems[0];
+            mimeType = currentFileItem.getMimeType();
+
+            // Download the file (images now use Glide direct loading via MediaViewerActivity)
+            FLog.d(TAG, "DownloadAndOpen: downloading %s from remote", currentFileItem.getName());
+            long downloadStartTime = System.currentTimeMillis();
             File[] extCacheDirs = ContextCompat.getExternalCacheDirs(context);
             if (extCacheDirs.length < 1) {
                 return false;
             }
             String saveLocation = extCacheDirs[0].getAbsolutePath();
 
-            fileLocation = saveLocation + "/" + fileItem.getName();
+            fileLocation = saveLocation + "/" + currentFileItem.getName();
 
-            process = rclone.downloadFile(remote, fileItem, saveLocation);
+            process = rclone.downloadFile(remote, currentFileItem, saveLocation);
 
             if (process != null) {
                 try {
@@ -1964,7 +2317,18 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             }
 
             if (process != null && process.exitValue() == 0) {
+                long downloadTime = System.currentTimeMillis() - downloadStartTime;
+                FLog.d(TAG, "DownloadAndOpen: download completed for %s (took %dms)", currentFileItem.getName(), downloadTime);
                 File savedFile = new File(fileLocation);
+
+                // Verify downloaded file size
+                if (savedFile.exists() && savedFile.length() != currentFileItem.getSize()) {
+                    FLog.w(TAG, "DownloadAndOpen: downloaded file size mismatch for %s, expected=%d actual=%d",
+                           currentFileItem.getName(), currentFileItem.getSize(), savedFile.length());
+                    savedFile.delete();
+                    return false;
+                }
+
                 savedFile.setReadOnly();
             }
 
@@ -1986,22 +2350,73 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 FLog.e(TAG, "Cannot provide file %s using dead context", fileLocation);
                 return;
             }
-            Uri sharedFileUri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileprovider", new File(fileLocation));
-            Intent intent = new Intent(Intent.ACTION_VIEW, sharedFileUri);
 
-            if (openAs == OPEN_AS_TEXT) {
-                intent.setDataAndType(sharedFileUri,"text/*");
-            } else if (openAs == OPEN_AS_IMAGE) {
-                intent.setDataAndType(sharedFileUri, "image/*");
-            } else {
-                if (mimeType != null && !"application/octet-stream".equals(mimeType)) {
-                    intent.setDataAndTypeAndNormalize(sharedFileUri, mimeType);
-                } else {
-                    intent.setDataAndType(sharedFileUri, "*/*");
+            FLog.i(TAG, "DownloadAndOpen.onPostExecute: openAs=%d, mimeType=%s, fileLocation=%s",
+                    openAs, mimeType, fileLocation);
+
+            // Use custom MediaViewerActivity for images (with swipe support and cache)
+            if (openAs == OPEN_AS_IMAGE || (mimeType != null && mimeType.startsWith("image/"))) {
+                FLog.i(TAG, "DownloadAndOpen: IMAGE branch - using local file path");
+
+                Intent intent = new Intent(context, ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.class);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_PATH, fileLocation);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, mimeType);
+
+                // Pass file list and current index for swipe navigation
+                if (directoryObject != null && currentFileItem != null) {
+                    java.util.List<FileItem> files = directoryObject.getDirectoryContent();
+                    if (files != null && !files.isEmpty()) {
+                        // Find current index
+                        int currentIndex = -1;
+                        for (int i = 0; i < files.size(); i++) {
+                            if (files.get(i).getPath().equals(currentFileItem.getPath())) {
+                                currentIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (currentIndex >= 0) {
+                            intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
+                                    new java.util.ArrayList<>(files));
+                            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                        }
+                    }
                 }
+
+                tryStartActivity(context, intent);
+            } else if (mimeType != null && mimeType.startsWith("video/")) {
+                FLog.i(TAG, "DownloadAndOpen: VIDEO branch - will call StreamTask for URL streaming");
+                // All videos: use streaming (leverages rclone's chunk cache with HTTP Range prefetch)
+                long videoSize = currentFileItem != null ? currentFileItem.getSize() : 0;
+                FLog.d(TAG, "DownloadAndOpen: video (%d MB), using streaming with chunk cache", videoSize / 1024 / 1024);
+
+                // Prefetch adjacent videos for smooth navigation
+                if (recyclerViewAdapter != null && currentFileItem != null) {
+                    int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(currentFileItem);
+                    prefetchAdjacentVideos(currentIndex);
+                }
+
+                new StreamTask(StreamTask.OPEN_AS_VIDEO).execute(currentFileItem);
+                return; // Don't call tryStartActivity, StreamTask will handle it
+            } else {
+                FLog.i(TAG, "DownloadAndOpen: OTHER branch - using system viewer with local file");
+                // Use system viewer for other file types
+                Uri sharedFileUri = FileProvider.getUriForFile(context, BuildConfig.APPLICATION_ID + ".fileprovider", new File(fileLocation));
+                Intent intent = new Intent(Intent.ACTION_VIEW, sharedFileUri);
+
+                if (openAs == OPEN_AS_TEXT) {
+                    intent.setDataAndType(sharedFileUri,"text/*");
+                } else {
+                    if (mimeType != null && !"application/octet-stream".equals(mimeType)) {
+                        intent.setDataAndTypeAndNormalize(sharedFileUri, mimeType);
+                    } else {
+                        intent.setDataAndType(sharedFileUri, "*/*");
+                    }
+                }
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                tryStartActivity(context, intent);
             }
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            tryStartActivity(context, intent);
+
         }
     }
 
@@ -2011,6 +2426,13 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         private static final String TAG = "StreamTask";
         public static final int OPEN_AS_VIDEO = 0;
         public static final int OPEN_AS_AUDIO = 1;
+
+        // Shared HTTP client for connection pooling (faster repeated requests to localhost)
+        private static final OkHttpClient sharedClient = new OkHttpClient.Builder()
+                .connectTimeout(1, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
         private int openAs;
         private LoadingDialog loadingDialog;
         private Intent serveIntent;
@@ -2028,97 +2450,226 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
+            long preExecuteTime = System.currentTimeMillis();
+            FLog.i(TAG, "StreamTask.onPreExecute: called at %d", preExecuteTime);
+
             loadingDialog = new LoadingDialog()
-                    .setCanCancel(false)
-                    .setTitle(R.string.loading);
+                    .setCanCancel(true)
+                    .setTitle(R.string.loading)
+                    .setNegativeButton(getResources().getString(R.string.cancel))
+                    .setOnNegativeListener(() -> {
+                        cancel(true);
+                        if (context != null) {
+                            context.stopService(new Intent(context, StreamingService.class));
+                        }
+                    });
 
             if (getFragmentManager() != null) {
+                FLog.i(TAG, "StreamTask.onPreExecute: calling dialog.show()");
                 loadingDialog.show(getChildFragmentManager(), "loading dialog");
+                FLog.i(TAG, "StreamTask.onPreExecute: dialog.show() returned");
+            } else {
+                FLog.w(TAG, "StreamTask.onPreExecute: FragmentManager is null, cannot show dialog");
             }
         }
 
         @Override
         protected Boolean doInBackground(FileItem... fileItems) {
+            long doInBackgroundStartTime = System.currentTimeMillis();
+            FLog.i(TAG, "StreamTask.doInBackground: called at %d - VERSION CHECK MARKER", doInBackgroundStartTime);
+
             if(context == null) {
                 FLog.w(TAG, "doInBackground: could not start stream, context is invalid");
                 return false;
             }
             fileItem = fileItems[0];
-            int port = allocatePort(8080, true);
-            serveIntent = new Intent(context, StreamingService.class);
-            serveIntent.putExtra(StreamingService.SERVE_PATH_ARG, fileItem.getPath());
-            serveIntent.putExtra(StreamingService.REMOTE_ARG, remote);
-            serveIntent.putExtra(StreamingService.SHOW_NOTIFICATION_TEXT, false);
-            serveIntent.putExtra(StreamingService.SERVE_PORT, port);
-            // GH-87: Release old stream
-            context.stopService(new Intent(context, StreamingService.class));
-            tryStartService(context, serveIntent);
+            long startTime = System.currentTimeMillis();
+            FLog.i(TAG, "StreamTask: preparing video stream for file=%s", fileItem.getName());
+            FLog.i(TAG, "StreamTask: file details - fullPath=%s, size=%d bytes, mimeType=%s",
+                    fileItem.getPath(), fileItem.getSize(), fileItem.getMimeType());
 
-            Uri uri = Uri.parse("http://127.0.0.1:" + port)
-                    .buildUpon()
-                    .appendPath(fileItem.getName())
-                    .build();
+            // Log current remote being browsed
+            FLog.i(TAG, "StreamTask: current remote being browsed - name=%s, type=%s, isCrypt=%b",
+                    remote.getName(), remote.getType(), remote.isCrypt());
+            FLog.i(TAG, "StreamTask: current path in fragment: %s",
+                    pathStack != null && !pathStack.isEmpty() ? pathStack.peek() : "(root)");
 
-            intent = new Intent(Intent.ACTION_VIEW);
+            // Ensure video server is serving the correct remote
+            // (MainActivity starts server for first remote, but user might be browsing a different one)
+            RcloneServerManager serverManager = RcloneServerManager.getInstance();
+            FLog.i(TAG, "StreamTask: checking if server is serving remote: %s", remote.getName());
+            boolean isServingCorrectRemote = serverManager.isServingRemote(remote.getName());
+            FLog.i(TAG, "StreamTask: isServingRemote result: %b", isServingCorrectRemote);
 
-            // open as takes precedence
-            if (openAs == OPEN_AS_VIDEO) {
-                intent.setDataAndType(uri, "video/*");
-            } else if (openAs == OPEN_AS_AUDIO) {
-                intent.setDataAndType(uri, "audio/*");
+            if (!isServingCorrectRemote) {
+                FLog.i(TAG, "StreamTask: need to switch server to remote: %s", remote.getName());
+                boolean started = serverManager.startServerForRemote(context, remote);
+                if (!started) {
+                    FLog.e(TAG, "StreamTask: failed to start server for remote: %s", remote.getName());
+                    return false;
+                }
+                // Give server a moment to start
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             } else {
-                String type = fileItem.getMimeType();
-                if (type.startsWith("audio/")) {
-                    intent.setDataAndType(uri, "audio/*");
-                } else if (type.startsWith("video/")) {
+                FLog.i(TAG, "StreamTask: server already serving correct remote: %s", remote.getName());
+            }
+
+            // Build URL using persistent root server (port 29180)
+            String remotePath = fileItem.getPath();
+
+            // Remove //remoteName prefix from path
+            // Path format: //remoteName/subpath/file.jpg
+            // Server serves remoteName: so URL should be: /subpath/file.jpg
+            String remoteName = remote.getName();
+            String urlPath;
+            if (remotePath.startsWith("//" + remoteName + "/")) {
+                // Path is //crypt/DCIM/file.jpg -> extract /DCIM/file.jpg
+                urlPath = remotePath.substring(("//" + remoteName).length());
+            } else if (remotePath.equals("//" + remoteName)) {
+                // Root path //crypt -> /
+                urlPath = "/";
+            } else {
+                // Fallback: shouldn't happen
+                urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
+            }
+
+            Uri uri = Uri.parse("http://127.0.0.1:" + STREAMING_SERVICE_PORT + urlPath);
+            FLog.i(TAG, "StreamTask: video URL: %s (from path: %s)", uri.toString(), remotePath);
+
+            String type = fileItem.getMimeType();
+
+            // For video files, use MediaViewerActivity instead of system player
+            if (type != null && type.startsWith("video/") && (openAs == OPEN_AS_VIDEO || openAs == -1)) {
+                // Get thumbnail server params for swipe to images support
+                String[] serverParams = getThumbnailServerParams();
+                String hiddenPath = serverParams[0];
+                int thumbnailPort = Integer.parseInt(serverParams[1]);
+
+                intent = new Intent(context, ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.class);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_PATH, fileItem.getPath());
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, thumbnailPort);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+
+                // Add file list for swipe navigation
+                if (recyclerViewAdapter != null) {
+                    int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(fileItem);
+                    if (currentIndex >= 0) {
+                        intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
+                                new java.util.ArrayList<>(recyclerViewAdapter.getCurrentContent()));
+                        intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                    }
+                }
+            } else {
+                // For audio or other types, use system player
+                intent = new Intent(Intent.ACTION_VIEW);
+
+                // open as takes precedence
+                if (openAs == OPEN_AS_VIDEO) {
                     intent.setDataAndType(uri, "video/*");
+                } else if (openAs == OPEN_AS_AUDIO) {
+                    intent.setDataAndType(uri, "audio/*");
                 } else {
-                    intent.setData(uri);
+                    if (type != null && type.startsWith("audio/")) {
+                        intent.setDataAndType(uri, "audio/*");
+                    } else if (type != null && type.startsWith("video/")) {
+                        intent.setDataAndType(uri, "video/*");
+                    } else {
+                        intent.setData(uri);
+                    }
                 }
             }
 
-            OkHttpClient client = new OkHttpClient.Builder().build();
+            // Quick availability check - persistent server should be ready immediately
+            // Using shared client for connection pooling
             Request request = new Request.Builder().url(uri.toString()).head().build();
-            int code = -1;
 
-            long waitTime = 30 * 1000;
             boolean available = false;
-            while (waitTime > 0) {
-                long waitStart = System.nanoTime();
+            int maxAttempts = 12; // 12 attempts * 250ms = 3 seconds max wait
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                if (isCancelled()) {
+                    FLog.i(TAG, "StreamTask: cancelled by user");
+                    return false;
+                }
+
                 try {
-                    FLog.v(TAG, "doInBackground: HEAD %s", uri.toString());
-                    Response response = client.newCall(request).execute();
-                    code = response.code();
+                    long headStartTime = System.currentTimeMillis();
+                    Response response = sharedClient.newCall(request).execute();
+                    long headEndTime = System.currentTimeMillis();
+                    int code = response.code();
 
-                    if(BuildConfig.DEBUG) {
-                        Map<String, List<String>> headerFields =  response.headers().toMultimap();
-                        String headers = StreamSupport.stream(headerFields.keySet())
-                                .map(k -> k + '=' + headerFields.get(k))
-                                .collect(Collectors.joining(",", "{", "}"));
-                        FLog.v(TAG, "doInBackground: Response %s", headers);
+                    long headDuration = headEndTime - headStartTime;
+
+                    // Get headers BEFORE closing response
+                    String contentLength = response.header("Content-Length", "none");
+                    String lastModified = response.header("Last-Modified", "none");
+                    String etag = response.header("ETag", "none");
+                    String acceptRanges = response.header("Accept-Ranges", "none");
+                    String cacheControl = response.header("Cache-Control", "none");
+
+                    // Get all headers for complete picture
+                    StringBuilder allHeaders = new StringBuilder();
+                    for (int i = 0; i < response.headers().size(); i++) {
+                        allHeaders.append(response.headers().name(i))
+                                .append("=")
+                                .append(response.headers().value(i))
+                                .append("; ");
                     }
+
+                    response.close();
+
+                    if (code == 200) {
+                        available = true;
+                        long elapsed = System.currentTimeMillis() - startTime;
+                        FLog.i(TAG, "StreamTask: server ready after %d attempts (%.1fs), HEAD took %dms, URL: %s",
+                                attempt, elapsed / 1000.0, headDuration, uri.toString());
+                        FLog.i(TAG, "StreamTask: response headers - Content-Length: %s, Last-Modified: %s, ETag: %s",
+                                contentLength, lastModified, etag);
+                        FLog.i(TAG, "StreamTask: response headers - Accept-Ranges: %s, Cache-Control: %s",
+                                acceptRanges, cacheControl);
+                        FLog.i(TAG, "StreamTask: all response headers: %s", allHeaders.toString());
+                        break;
+                    }
+                    // Log all non-200 responses (404, 500, etc.)
+                    FLog.w(TAG, "StreamTask: HEAD attempt %d, response code: %d, took %dms, URL: %s",
+                            attempt, code, headDuration, uri.toString());
                 } catch (IOException e) {
-                    FLog.v(TAG, "doInBackground: Server not (yet) online");
+                    if (attempt == 1 || attempt == maxAttempts) {
+                        FLog.w(TAG, "StreamTask: HEAD attempt %d failed: %s, URL: %s", attempt, e.getMessage(), uri.toString());
+                    }
                 }
 
-                if (code == 200) {
-                    available = true;
-                    break;
-                }
                 try {
                     Thread.sleep(250);
                 } catch (InterruptedException e) {
-                    // ignored
+                    FLog.i(TAG, "StreamTask: interrupted");
+                    Thread.currentThread().interrupt();
+                    return false;
                 }
-                long waitEnd = System.nanoTime();
-                long actualWait = (waitEnd - waitStart) / 1000000;
-                waitTime -= actualWait;
             }
+
+            if (!available) {
+                long elapsed = System.currentTimeMillis() - startTime;
+                FLog.e(TAG, "StreamTask: server not available after %.1fs, URL: %s, remotePath: %s", elapsed / 1000.0, uri.toString(), remotePath);
+            }
+
+            long doInBackgroundEndTime = System.currentTimeMillis();
+            FLog.i(TAG, "StreamTask.doInBackground: ending at %d, result=%b", doInBackgroundEndTime, available);
             return available;
         }
 
         @Override
         protected void onPostExecute(Boolean success) {
+            long postExecuteTime = System.currentTimeMillis();
+            FLog.i(TAG, "StreamTask.onPostExecute: called at %d, success=%b", postExecuteTime, success);
+
             if (!isRunning) {
                 // TODO: restructure user flow
                 //       1) Start the host service and display a notification
@@ -2128,19 +2679,26 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 //          a) The user has not navigated away -> invoke Intent
                 //          b) The user has navigated away -> Send an intent to
                 //             the service to update its notification
-                FLog.w(TAG, "Streaming failed: user navigated away before stream could load");
+                FLog.w(TAG, "StreamTask: user navigated away before stream could load");
                 return;
             }
+
+            FLog.i(TAG, "StreamTask.onPostExecute: calling dismissSilently(loadingDialog)");
             Dialogs.dismissSilently(loadingDialog);
+            FLog.i(TAG, "StreamTask.onPostExecute: dismissSilently returned");
+
             if(success) {
+                FLog.i(TAG, "StreamTask: success, opening video player for %s", fileItem.getName());
                 Activity activity = getActivity();
                 if (null == activity) {
+                    FLog.e(TAG, "StreamTask: activity is null, cannot start player");
                     return;
                 }
                 tryStartActivityForResult(activity, intent, STREAMING_INTENT_RESULT);
             } else {
+                FLog.e(TAG, "StreamTask: failed to start stream for %s", fileItem.getName());
                 Toasty.error(context, getString(R.string.streaming_task_failed), Toast.LENGTH_LONG, true).show();
-                context.stopService(serveIntent);
+                // Note: We're using persistent server now, so no need to stop service
             }
         }
     }

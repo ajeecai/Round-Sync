@@ -29,6 +29,7 @@ import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.util.FLog;
+import ca.pkay.rcloneexplorer.util.PersistentGlideUrl;
 import io.github.x0b.safdav.SafAccessProvider;
 import io.github.x0b.safdav.file.FileAccessError;
 
@@ -115,15 +116,34 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                         .centerCrop()
                         .diskCacheStrategy(DiskCacheStrategy.ALL)
                         .placeholder(R.drawable.ic_file)
-                        .timeout(10000);
+                        .error(R.drawable.ic_file) // Keep placeholder on error to allow retry
+                        .timeout(15000); // Increase timeout to 15s for slow networks
                 if(localLoad) {
                     bindSafFile(holder, item, glideOption);
                 } else {
                     String[] serverParams = listener.getThumbnailServerParams();
                     String hiddenPath = serverParams[0];
                     int serverPort = Integer.parseInt(serverParams[1]);
-                    String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath + '/' + item.getPath();
-                    FLog.d(TAG, "onBindViewHolder: loading thumbnail from url=%s for file=%s", url, item.getName());
+
+                    // Remove //remoteName prefix from path
+                    // Path format: //remoteName/subpath/file.jpg -> subpath/file.jpg
+                    String itemPath = item.getPath();
+                    String pathAfterRemote;
+                    if (itemPath.startsWith("//")) {
+                        int thirdSlash = itemPath.indexOf('/', 2);
+                        if (thirdSlash > 0) {
+                            pathAfterRemote = itemPath.substring(thirdSlash + 1);
+                        } else {
+                            pathAfterRemote = "";
+                        }
+                    } else {
+                        pathAfterRemote = itemPath.startsWith("/") ? itemPath.substring(1) : itemPath;
+                    }
+
+                    String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath +
+                                (pathAfterRemote.isEmpty() ? "" : "/" + pathAfterRemote);
+                    FLog.d(TAG, "onBindViewHolder: loading thumbnail from url=%s for file=%s (original path=%s)",
+                           url, item.getName(), itemPath);
                     Glide
                             .with(context)
                             .load(new PersistentGlideUrl(url))
@@ -239,23 +259,6 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
         }
     }
 
-    private static class PersistentGlideUrl extends GlideUrl {
-
-        public PersistentGlideUrl(String url) {
-            super(url);
-        }
-
-        @Override
-        public String getCacheKey() {
-            try {
-                URL url = super.toURL();
-                String path = url.getPath();
-                return path.substring(path.indexOf('/', 1));
-            } catch (MalformedURLException e) {
-                return super.getCacheKey();
-            }
-        }
-    }
 
     @Override
     public int getItemCount() {

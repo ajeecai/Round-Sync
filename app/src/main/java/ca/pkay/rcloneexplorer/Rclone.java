@@ -16,6 +16,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -124,6 +130,9 @@ public class Rclone {
         command.add(cachePath);
         command.add("--cache-db-path");
         command.add(cachePath);
+        // Limit chunk cache to 1GB for video streaming
+        command.add("--cache-chunk-total-size");
+        command.add("1G");
 
         /*
 
@@ -230,8 +239,148 @@ public class Rclone {
         SyncLog.error(context, "Rclone operation", logOutput);
     }
 
-    @Nullable
+    /**
+     * Get directory content via RC API of running rclone serve process.
+     * This shares the metadata cache with serve, eliminating duplicate Google Drive queries.
+     *
+     * If RC API fails, it means serve is not running properly, so return null.
+     * Video playback won't work either if serve is broken, so no point in fallback.
+     */
     public List<FileItem> getDirectoryContent(RemoteItem remote, String path, boolean startAtRoot) {
+        FLog.i(TAG, "getDirectoryContent: called with remote=%s, path=%s, startAtRoot=%b",
+                remote.getName(), path, startAtRoot);
+
+        try {
+            // Build remote path for RC API
+            // path format: "//remoteName/dir1/dir2" or "//remoteName" (root)
+            // RC API expects: "dir1/dir2" or "" (for root)
+            String remotePath = "";
+            String rootPrefix = "//" + remote.getName();
+            if (path.compareTo(rootPrefix) != 0) {
+                // Extract everything after "//remoteName/"
+                if (path.startsWith(rootPrefix + "/")) {
+                    remotePath = path.substring(rootPrefix.length() + 1);
+                }
+            }
+
+            android.util.Log.i("Rclone", "==== RC_API ==== remotePath='" + remotePath + "', path='" + path + "'");
+            FLog.i(TAG, "getDirectoryContent: remotePath=%s (extracted from path=%s)", remotePath, path);
+
+            // Prepare RC API request
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("fs", remote.getName() + ":");
+            requestBody.put("remote", remotePath);
+            android.util.Log.i("Rclone", "==== RC_API ==== sending request: fs=" + remote.getName() + ": remote=" + remotePath);
+            requestBody.put("opt", new JSONObject().put("recurse", false));
+
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url("http://127.0.0.1:29181/operations/list")
+                    .post(RequestBody.create(
+                            MediaType.parse("application/json"),
+                            requestBody.toString()))
+                    .build();
+
+            long startTime = System.currentTimeMillis();
+            Response response = null;
+            int retries = 0;
+            int maxRetries = 3;
+
+            // Retry logic: server might still be starting up
+            while (retries < maxRetries) {
+                try {
+                    response = client.newCall(request).execute();
+                    break; // Success, exit retry loop
+                } catch (java.net.ConnectException | java.net.SocketTimeoutException e) {
+                    retries++;
+                    if (retries < maxRetries) {
+                        FLog.w(TAG, "getDirectoryContent: RC API connection failed (attempt %d/%d), waiting 500ms before retry: %s",
+                               retries, maxRetries, e.getMessage());
+                        try {
+                            Thread.sleep(500); // Wait 500ms before retry
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt(); // Restore interrupt status
+                            FLog.w(TAG, "getDirectoryContent: retry interrupted");
+                            break; // Exit retry loop if interrupted
+                        }
+                    } else {
+                        FLog.e(TAG, "getDirectoryContent: RC API connection failed after %d attempts: %s",
+                               maxRetries, e.getMessage());
+                        throw e; // Re-throw after max retries
+                    }
+                }
+            }
+
+            long duration = System.currentTimeMillis() - startTime;
+
+            if (response == null) {
+                FLog.e(TAG, "getDirectoryContent: response is null after retries");
+                return null;
+            }
+
+            if (!response.isSuccessful()) {
+                String errorBody = response.body() != null ? response.body().string() : "no body";
+                response.close();
+                FLog.e(TAG, "getDirectoryContent: RC API failed (code=%d), error: %s", response.code(), errorBody);
+                return null;
+            }
+
+            String responseBody = response.body().string();
+            response.close();
+
+            JSONObject result = new JSONObject(responseBody);
+            JSONArray items = result.getJSONArray("list");
+
+            List<FileItem> fileItemList = new ArrayList<>();
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject jsonObject = items.getJSONObject(i);
+                // RC API returns Path relative to remote root (fs parameter)
+                // e.g., when querying fs=crypt: remote="", Path="DCIM" (at root)
+                // e.g., when querying fs=crypt: remote="DCIM", Path="DCIM/file.jpg" (in subdir)
+                // We must match the legacy lsjson format:
+                // - At root: filePath = "//crypt/DCIM"
+                // - In DCIM: filePath = "//crypt/DCIM/file.jpg"
+                String rcPath = jsonObject.getString("Path");
+                String fileName = jsonObject.getString("Name");
+                // Always include the full path starting with //remoteName
+                String filePath = path + "/" + fileName;
+                android.util.Log.i("Rclone", "==== RC_API ==== item: Name=" + fileName + " Path=" + rcPath + " -> filePath=" + filePath);
+                long fileSize = jsonObject.getLong("Size");
+                String fileModTime = jsonObject.getString("ModTime");
+                boolean fileIsDir = jsonObject.getBoolean("IsDir");
+                String mimeType = jsonObject.getString("MimeType");
+
+                if (remote.isCrypt()) {
+                    String extension = fileName.substring(fileName.lastIndexOf(".") + 1);
+                    String type = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+                    if (type != null) {
+                        mimeType = type;
+                    }
+                }
+
+                FileItem fileItem = new FileItem(remote, filePath, fileName, fileSize, fileModTime, mimeType, fileIsDir, startAtRoot);
+                fileItemList.add(fileItem);
+            }
+
+            FLog.i(TAG, "getDirectoryContent: SUCCESS via RC API in %dms, %d items, path=%s",
+                    duration, fileItemList.size(), path);
+            return fileItemList;
+
+        } catch (Exception e) {
+            FLog.e(TAG, "getDirectoryContent: RC API exception - %s", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * @deprecated Legacy method using separate rclone process - not used anymore.
+     */
+    @Deprecated
+    private List<FileItem> getDirectoryContentLegacy(RemoteItem remote, String path, boolean startAtRoot) {
         String remoteAndPath = remote.getName() + ":";
         if (startAtRoot) {
             remoteAndPath += "/";
@@ -644,6 +793,49 @@ public class Rclone {
             params.add(baseUrl);
         }
 
+        // Add VFS cache parameters for serve http (for video/image caching)
+        if (commandProtocol.equals("http")) {
+            // Enable full VFS caching for instant playback of previously viewed content
+            params.add("--vfs-cache-mode");
+            params.add("full");
+
+            // Set VFS cache size and location
+            File vfsCacheDir = new File(context.getCacheDir(), "vfs-cache");
+            if (!vfsCacheDir.exists()) {
+                vfsCacheDir.mkdirs();
+            }
+            params.add("--vfs-cache-max-size");
+            params.add("1G");
+            params.add("--vfs-cache-max-age");
+            params.add("24h");
+
+            // Increase buffer size for faster streaming
+            params.add("--buffer-size");
+            params.add("16M");
+
+            // Optimize directory caching to reduce Google Drive API calls on first access
+            params.add("--dir-cache-time");
+            params.add("1h");  // Cache directory listings for 1 hour
+
+            // Use fast fingerprinting to skip unnecessary file validation
+            // This reduces API calls when opening videos after directory switch
+            params.add("--vfs-fast-fingerprint");
+
+            // Enable RC (Remote Control) API ONLY for video server (port 29180)
+            // This allows directory listing to share metadata cache with video serving,
+            // eliminating duplicate Google Drive queries
+            // Thumbnail server (29179) doesn't need RC API
+            if (port == 29180) {
+                params.add("--rc");
+                params.add("--rc-addr");
+                params.add("127.0.0.1:29181");
+                params.add("--rc-no-auth");
+                FLog.d(TAG, "serve: VFS cache enabled (mode=full, max-size=1G, buffer=16M), RC API enabled on :29181");
+            } else {
+                FLog.d(TAG, "serve: VFS cache enabled (mode=full, max-size=1G, buffer=16M), RC API disabled (not video server)");
+            }
+        }
+
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context);
         boolean isLoggingEnabled = sharedPreferences.getBoolean(context.getString(R.string.pref_key_logs), false);
         if (isLoggingEnabled) {
@@ -660,10 +852,29 @@ public class Rclone {
 
             params.add("--log-file");
             params.add(serveLog.getAbsolutePath());
+
+            // Add dump flags to capture Google Drive API requests/responses
+            // Use "headers" instead of "bodies" to avoid logging large response data (images, etc.)
+            params.add("--dump");
+            params.add("headers");
+            FLog.d(TAG, "serve: HTTP dump enabled (headers) to capture API metadata without response bodies");
         }
 
         String[] env = getRcloneEnv();
         String[] command = params.toArray(new String[0]);
+
+        // Log complete serve command for debugging
+        FLog.i(TAG, "serve: starting rclone serve with:");
+        FLog.i(TAG, "serve:   remote=%s, type=%s, isCrypt=%b", remoteName, remote.getType(), remote.isCrypt());
+        FLog.i(TAG, "serve:   protocol=%s, port=%d, servePath=%s", commandProtocol, port, servePath);
+        FLog.i(TAG, "serve:   path=%s", path);
+        FLog.i(TAG, "serve:   baseUrl=%s", baseUrl);
+        StringBuilder cmdBuilder = new StringBuilder("serve:   full command: ");
+        for (String arg : command) {
+            cmdBuilder.append(arg).append(" ");
+        }
+        FLog.i(TAG, cmdBuilder.toString());
+
         try {
             return getRuntimeProcess(command, env);
         } catch (IOException e) {
