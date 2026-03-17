@@ -21,12 +21,11 @@ import okhttp3.Response;
 /**
  * Manages video prefetch queue with priority-based execution
  * - Priority 0: Currently clicked video
- * - Priority 1: Adjacent videos (±5 from clicked)
+ * - Priority 1: Adjacent videos (configurable count from clicked)
  * - Priority 2: Visible videos in RecyclerView
  */
 public class VideoPrefetchManager {
     private static final String TAG = "VideoPrefetchManager";
-    private static final int PREFETCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
     private static final int CONCURRENT_PREFETCH_THREADS = 3;
 
     private static VideoPrefetchManager instance;
@@ -186,8 +185,8 @@ public class VideoPrefetchManager {
             long size = exists ? cacheFile.length() : 0;
 
             // Consider cached if file exists and has enough data for frame extraction
-            // Use the smaller of PREFETCH_SIZE_BYTES or actual video size
-            long minSize = Math.min(PREFETCH_SIZE_BYTES, video.getSize());
+            // Use the smaller of VIDEO_PREFETCH_SIZE_BYTES or actual video size
+            long minSize = Math.min(RcloneServerManager.VIDEO_PREFETCH_SIZE_BYTES, video.getSize());
             return exists && size >= minSize;
 
         } catch (Exception e) {
@@ -284,7 +283,7 @@ public class VideoPrefetchManager {
             // HTTP Range request for first 5MB
             Request request = new Request.Builder()
                     .url(videoUrl)
-                    .addHeader("Range", "bytes=0-" + (PREFETCH_SIZE_BYTES - 1))
+                    .addHeader("Range", "bytes=0-" + (RcloneServerManager.VIDEO_PREFETCH_SIZE_BYTES - 1))
                     .build();
 
             Response response = client.newCall(request).execute();

@@ -126,8 +126,6 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private static final int FILE_PICKER_UPLOAD_RESULT = 186;
     private static final int FILE_PICKER_DOWNLOAD_RESULT = 204;
     private static final int FILE_PICKER_SYNC_RESULT = 45;
-    private static final int PREFETCH_IMAGE_COUNT = 5; // Number of videos to prefetch before and after current video
-    private static final long VIDEO_PREFETCH_SIZE = 10L * 1024L * 1024L; // 10MB - amount to prefetch for videos via HTTP Range (rclone chunk cache)
     private final String SAVED_PATH = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_PATH";
     private final String SAVED_CONTENT = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_CONTENT";
     private final String SAVED_SEARCH_MODE = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SEARCH_MODE";
@@ -1336,14 +1334,15 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 // Clicked video gets highest priority
                 highPriorityVideos.add(fileItem);
 
-                // Find up to 5 videos before and 5 videos after
-                for (int i = currentIndex - 1; i >= 0 && highPriorityVideos.size() < 11; i--) {
+                // Find up to PREFETCH_ADJACENT_COUNT videos before and after
+                int maxVideos = 1 + RcloneServerManager.VIDEO_PREFETCH_ADJACENT_COUNT * 2;
+                for (int i = currentIndex - 1; i >= 0 && highPriorityVideos.size() < maxVideos; i--) {
                     FileItem item = allItems.get(i);
                     if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
                         highPriorityVideos.add(item);
                     }
                 }
-                for (int i = currentIndex + 1; i < allItems.size() && highPriorityVideos.size() < 11; i++) {
+                for (int i = currentIndex + 1; i < allItems.size() && highPriorityVideos.size() < maxVideos; i++) {
                     FileItem item = allItems.get(i);
                     if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
                         highPriorityVideos.add(item);
@@ -1833,7 +1832,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
                     }
 
-                    String url = ""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath;
+                    String url = "http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath;
                     FLog.i(TAG, "prewarmFirstVideoCache: sending HEAD to %s", firstVideo.getName());
 
                     OkHttpClient client = new OkHttpClient.Builder()
@@ -1883,12 +1882,12 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     long prefetchStartTime = System.currentTimeMillis();
                     FLog.d(TAG, "prefetchAdjacentVideos: starting video prefetch at index=%d", currentIndex);
 
-                    // Find adjacent videos within PREFETCH_IMAGE_COUNT range
+                    // Find adjacent videos within VIDEO_PREFETCH_ADJACENT_COUNT range
                     ArrayList<FileItem> videosToPreload = new ArrayList<>();
                     List<FileItem> allItems = recyclerViewAdapter.getCurrentContent();
 
                     // Search backwards
-                    for (int i = currentIndex - 1; i >= 0 && videosToPreload.size() < PREFETCH_IMAGE_COUNT; i--) {
+                    for (int i = currentIndex - 1; i >= 0 && videosToPreload.size() < RcloneServerManager.VIDEO_PREFETCH_ADJACENT_COUNT; i--) {
                         FileItem item = allItems.get(i);
                         if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
                             videosToPreload.add(item);
@@ -1896,7 +1895,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     }
 
                     // Search forwards
-                    for (int i = currentIndex + 1; i < allItems.size() && videosToPreload.size() < PREFETCH_IMAGE_COUNT * 2; i++) {
+                    for (int i = currentIndex + 1; i < allItems.size() && videosToPreload.size() < RcloneServerManager.VIDEO_PREFETCH_ADJACENT_COUNT * 2; i++) {
                         FileItem item = allItems.get(i);
                         if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
                             videosToPreload.add(item);
@@ -1929,10 +1928,10 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             if (!remotePath.startsWith("/")) {
                                 remotePath = "/" + remotePath;
                             }
-                            String url = ""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + remotePath;
+                            String url = "http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.STREAMING_SERVICE_PORT + remotePath;
 
-                            // Calculate range size (min of VIDEO_PREFETCH_SIZE or actual file size)
-                            long rangeEnd = Math.min(VIDEO_PREFETCH_SIZE - 1, video.getSize() - 1);
+                            // Calculate range size (min of VIDEO_PREFETCH_SIZE_BYTES or actual file size)
+                            long rangeEnd = Math.min(RcloneServerManager.VIDEO_PREFETCH_SIZE_BYTES - 1, video.getSize() - 1);
                             String rangeHeader = "bytes=0-" + rangeEnd;
 
                             FLog.d(TAG, "prefetchAdjacentVideos: fetching %s (range=%s, size=%d MB)",
@@ -2683,7 +2682,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
             }
 
-            Uri uri = Uri.parse(""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath);
+            Uri uri = Uri.parse("http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath);
             FLog.i(TAG, "StreamTask: video URL: %s (from path: %s)", uri.toString(), remotePath);
 
             String type = fileItem.getMimeType();

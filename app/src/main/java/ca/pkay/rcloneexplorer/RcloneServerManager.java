@@ -15,6 +15,8 @@ public class RcloneServerManager {
     public static final int THUMBNAIL_SERVICE_PORT = 29179;
     public static final int STREAMING_SERVICE_PORT = 29180;
     public static final int RC_API_PORT = 29181;
+    public static final int VIDEO_PREFETCH_ADJACENT_COUNT = 5; // Number of videos to prefetch before/after clicked video
+    public static final int VIDEO_PREFETCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB prefetch via HTTP Range
 
     private static RcloneServerManager instance;
     private Process serverProcess;
