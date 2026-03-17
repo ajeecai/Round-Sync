@@ -78,26 +78,54 @@ class GeneralPreferencesFragment : PreferenceFragmentCompat() {
 
     private fun clearThumbnailCache() {
         try {
-            // Clear both memory and disk cache
+            // Clear Glide memory cache (thumbnails)
             Glide.get(requireContext()).clearMemory()
 
-            // Clear disk cache in background thread
+            // Clear disk caches in background thread
             Thread {
                 try {
+                    FLog.i(TAG(), "clearThumbnailCache: clearing Glide disk cache...")
                     Glide.get(requireContext()).clearDiskCache()
+                    FLog.i(TAG(), "clearThumbnailCache: Glide disk cache cleared")
+
+                    // Clear rclone VFS cache (video files)
+                    FLog.i(TAG(), "clearThumbnailCache: clearing rclone VFS cache...")
+                    clearRcloneVfsCache()
+                    FLog.i(TAG(), "clearThumbnailCache: rclone VFS cache cleared")
+
                     requireActivity().runOnUiThread {
                         Toast.makeText(context, getString(R.string.thumbnail_cache_cleared), Toast.LENGTH_SHORT).show()
                     }
                 } catch (e: Exception) {
-                    FLog.e(TAG(), "clearThumbnailCache: error clearing disk cache", e)
+                    FLog.e(TAG(), "clearThumbnailCache: error clearing caches", e)
                     requireActivity().runOnUiThread {
-                        Toast.makeText(context, "Failed to clear disk cache", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Failed to clear cache: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }.start()
         } catch (e: Exception) {
             FLog.e(TAG(), "clearThumbnailCache: error", e)
             Toast.makeText(context, "Failed to clear cache", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun clearRcloneVfsCache() {
+        try {
+            // Method 1: Delete cache directory files directly
+            val appDataDir = requireContext().applicationInfo.dataDir
+            val cacheDir = java.io.File("$appDataDir/cache/rclone/vfs")
+
+            if (cacheDir.exists()) {
+                FLog.i(TAG(), "clearRcloneVfsCache: deleting cache directory: ${cacheDir.absolutePath}")
+                val deleted = cacheDir.deleteRecursively()
+                FLog.i(TAG(), "clearRcloneVfsCache: cache directory deleted=$deleted")
+            } else {
+                FLog.i(TAG(), "clearRcloneVfsCache: cache directory does not exist")
+            }
+
+        } catch (e: Exception) {
+            FLog.e(TAG(), "clearRcloneVfsCache: error", e)
+            // Don't throw - allow Glide cache clearing to complete even if VFS clearing fails
         }
     }
 

@@ -11,7 +11,7 @@ import java.util.List;
  */
 public class RcloneServerManager {
     private static final String TAG = "RcloneServerManager";
-    private static final int STREAMING_SERVICE_PORT = 29180;
+    public static final int STREAMING_SERVICE_PORT = 29180; // Global port for video streaming
 
     private static RcloneServerManager instance;
     private Process serverProcess;

@@ -56,6 +56,7 @@ import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.Items.FilterEntry;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.Items.SyncDirectionObject;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.rclone.Provider;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.SyncLog;
@@ -821,11 +822,11 @@ public class Rclone {
             // This reduces API calls when opening videos after directory switch
             params.add("--vfs-fast-fingerprint");
 
-            // Enable RC (Remote Control) API ONLY for video server (port 29180)
+            // Enable RC (Remote Control) API ONLY for video server
             // This allows directory listing to share metadata cache with video serving,
             // eliminating duplicate Google Drive queries
             // Thumbnail server (29179) doesn't need RC API
-            if (port == 29180) {
+            if (port == RcloneServerManager.STREAMING_SERVICE_PORT) {
                 params.add("--rc");
                 params.add("--rc-addr");
                 params.add("127.0.0.1:29181");

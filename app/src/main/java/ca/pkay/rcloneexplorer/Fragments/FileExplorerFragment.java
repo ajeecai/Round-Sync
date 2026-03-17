@@ -16,6 +16,8 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
@@ -60,8 +62,10 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Stack;
 
 import ca.pkay.rcloneexplorer.Activities.MainActivity;
@@ -91,6 +95,7 @@ import ca.pkay.rcloneexplorer.Services.ThumbnailsLoadingService;
 import ca.pkay.rcloneexplorer.util.ActivityHelper;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.LargeParcel;
+import ca.pkay.rcloneexplorer.util.VideoPrefetchManager;
 import ca.pkay.rcloneexplorer.workmanager.EphemeralTaskManager;
 import ca.pkay.rcloneexplorer.workmanager.SyncManager;
 import de.felixnuesse.ui.BreadcrumbView;
@@ -177,6 +182,8 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private Context context;
     private String thumbnailServerAuth;
     private int thumbnailServerPort;
+    private Set<FileItem> previouslyVisibleVideos = new HashSet<>();
+    private VideoPrefetchManager videoPrefetchManager;
     private boolean wrapFilenames;
     private SharedPreferences.OnSharedPreferenceChangeListener prefChangeListener;
 
@@ -299,6 +306,40 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         recyclerViewAdapter.showThumbnails(showThumbnails);
         recyclerViewAdapter.setWrapFileNames(wrapFilenames);
         recyclerView.setAdapter(recyclerViewAdapter);
+
+        // Initialize VideoPrefetchManager
+        videoPrefetchManager = VideoPrefetchManager.getInstance(context);
+
+        // Set callback to refresh thumbnails when prefetch completes
+        videoPrefetchManager.setPrefetchCallback((fileItem, success) -> {
+            if (success && recyclerViewAdapter != null) {
+                // Find the position of the prefetched video in the list
+                List<FileItem> currentContent = recyclerViewAdapter.getCurrentContent();
+                if (currentContent != null) {
+                    int position = currentContent.indexOf(fileItem);
+                    if (position >= 0) {
+                        recyclerViewAdapter.notifyItemChanged(position);
+                    }
+                }
+            }
+        });
+
+        // Add scroll listener for video prefetch visibility tracking
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                super.onScrolled(rv, dx, dy);
+                handleVisibilityChange();
+            }
+
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+                super.onScrollStateChanged(rv, newState);
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    handleVisibilityChange();
+                }
+            }
+        });
 
         if (remote.isRemoteType(RemoteItem.SFTP) && !goToDefaultSet & savedInstanceState == null) {
             showSFTPgoToDialog();
@@ -1278,9 +1319,50 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         if (type.startsWith("video/") || type.startsWith("audio/")) {
             FLog.i(TAG, "onFileClicked: VIDEO/AUDIO branch - calling StreamTask");
 
-            // Prefetch adjacent videos for smooth navigation
+            // Prefetch adjacent videos with priority for smooth navigation
             if (type.startsWith("video/")) {
+                FLog.i(TAG, "onFileClicked: VIDEO branch - starting priority prefetch");
+
+                if (videoPrefetchManager == null) {
+                    FLog.e(TAG, "onFileClicked: videoPrefetchManager is NULL! Initializing now...");
+                    videoPrefetchManager = VideoPrefetchManager.getInstance(context);
+                }
+
                 int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(fileItem);
+                FLog.i(TAG, "onFileClicked: currentIndex=%d", currentIndex);
+
+                List<FileItem> allItems = recyclerViewAdapter.getCurrentContent();
+                List<FileItem> highPriorityVideos = new ArrayList<>();
+
+                // Clicked video gets highest priority
+                highPriorityVideos.add(fileItem);
+
+                // Find up to 5 videos before and 5 videos after
+                for (int i = currentIndex - 1; i >= 0 && highPriorityVideos.size() < 11; i--) {
+                    FileItem item = allItems.get(i);
+                    if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                        highPriorityVideos.add(item);
+                    }
+                }
+                for (int i = currentIndex + 1; i < allItems.size() && highPriorityVideos.size() < 11; i++) {
+                    FileItem item = allItems.get(i);
+                    if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                        highPriorityVideos.add(item);
+                    }
+                }
+
+                FLog.i(TAG, "onFileClicked: found %d high priority videos", highPriorityVideos.size());
+
+                // Update priorities: 0 for clicked video, 1 for adjacent
+                for (int i = 0; i < highPriorityVideos.size(); i++) {
+                    int priority = (i == 0) ? 0 : 1;
+                    FLog.i(TAG, "onFileClicked: adding video %s with priority=%d", highPriorityVideos.get(i).getName(), priority);
+                    videoPrefetchManager.addToPrefetchQueue(highPriorityVideos.get(i), priority);
+                }
+
+                FLog.i(TAG, "onFileClicked: added %d videos to priority prefetch queue", highPriorityVideos.size());
+
+                // Also keep old prefetch for backward compatibility (will be removed later)
                 prefetchAdjacentVideos(currentIndex);
             }
 
@@ -1848,7 +1930,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             if (!remotePath.startsWith("/")) {
                                 remotePath = "/" + remotePath;
                             }
-                            String url = "http://localhost:" + STREAMING_SERVICE_PORT + remotePath;
+                            String url = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + remotePath;
 
                             // Calculate range size (min of VIDEO_PREFETCH_SIZE or actual file size)
                             long rangeEnd = Math.min(VIDEO_PREFETCH_SIZE - 1, video.getSize() - 1);
@@ -1902,6 +1984,66 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 }
             }
         }).start();
+    }
+
+    /**
+     * Handle RecyclerView visibility changes for smart video prefetch
+     * Called on scroll and when scroll becomes idle
+     */
+    private void handleVisibilityChange() {
+        if (recyclerViewLinearLayoutManager == null || recyclerViewAdapter == null) {
+            return;
+        }
+
+        if (videoPrefetchManager == null) {
+            FLog.e(TAG, "handleVisibilityChange: videoPrefetchManager is NULL!");
+            return;
+        }
+
+        int firstVisible = recyclerViewLinearLayoutManager.findFirstVisibleItemPosition();
+        int lastVisible = recyclerViewLinearLayoutManager.findLastVisibleItemPosition();
+
+        if (firstVisible == RecyclerView.NO_POSITION || lastVisible == RecyclerView.NO_POSITION) {
+            return;
+        }
+
+        Set<FileItem> currentlyVisible = new HashSet<>();
+        List<FileItem> allItems = recyclerViewAdapter.getCurrentContent();
+
+        if (allItems == null || allItems.isEmpty()) {
+            return;
+        }
+
+        // Collect currently visible videos
+        for (int i = firstVisible; i <= lastVisible && i < allItems.size(); i++) {
+            FileItem item = allItems.get(i);
+            if (item.getMimeType() != null && item.getMimeType().startsWith("video/")) {
+                currentlyVisible.add(item);
+            }
+        }
+
+        // New videos that became visible: add to prefetch queue (priority=2)
+        Set<FileItem> newlyVisible = new HashSet<>(currentlyVisible);
+        newlyVisible.removeAll(previouslyVisibleVideos);
+        for (FileItem video : newlyVisible) {
+            FLog.i(TAG, "handleVisibilityChange: adding newly visible video: %s", video.getName());
+            videoPrefetchManager.addToPrefetchQueue(video, 2);
+        }
+
+        // Videos that scrolled out: cancel queued prefetch
+        Set<FileItem> scrolledOut = new HashSet<>(previouslyVisibleVideos);
+        scrolledOut.removeAll(currentlyVisible);
+        if (!scrolledOut.isEmpty()) {
+            videoPrefetchManager.cancelQueued(new ArrayList<>(scrolledOut));
+            FLog.i(TAG, "handleVisibilityChange: cancelled %d scrolled out videos", scrolledOut.size());
+        }
+
+        // Update tracking
+        previouslyVisibleVideos = currentlyVisible;
+
+        if (!newlyVisible.isEmpty()) {
+            FLog.i(TAG, "handleVisibilityChange: added %d newly visible videos", newlyVisible.size());
+        }
     }
 
     /*
@@ -2145,6 +2287,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             // operations/list and serve http use different dir caches even in the same process
             // This eliminates the ~500ms Google Drive API delay on first video click
             prewarmFirstVideoCache();
+
+            // Trigger initial video prefetch for visible items
+            handleVisibilityChange();
         }
 
         @Override
@@ -2386,6 +2531,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 tryStartActivity(context, intent);
             } else if (mimeType != null && mimeType.startsWith("video/")) {
                 FLog.i(TAG, "DownloadAndOpen: VIDEO branch - will call StreamTask for URL streaming");
+
                 // All videos: use streaming (leverages rclone's chunk cache with HTTP Range prefetch)
                 long videoSize = currentFileItem != null ? currentFileItem.getSize() : 0;
                 FLog.d(TAG, "DownloadAndOpen: video (%d MB), using streaming with chunk cache", videoSize / 1024 / 1024);

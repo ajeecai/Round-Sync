@@ -24,6 +24,9 @@ public class LogFilterUtil {
                line.contains("MediaViewerActivity") ||
                line.contains("ThumbnailGlideModule") ||
                line.contains("Glide") ||
+               line.contains("VideoPrefetchManager") ||
+               line.contains("VideoFrameExtractor") ||
+               line.contains("VideoThumbnailLoader") ||
                line.contains("rclone");
     }
 }

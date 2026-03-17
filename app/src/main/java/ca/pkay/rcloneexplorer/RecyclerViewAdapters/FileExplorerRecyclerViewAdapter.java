@@ -28,8 +28,10 @@ import java.util.List;
 import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
+import ca.pkay.rcloneexplorer.glide.VideoThumbnailLoader;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.PersistentGlideUrl;
+import ca.pkay.rcloneexplorer.util.VideoPrefetchManager;
 import io.github.x0b.safdav.SafAccessProvider;
 import io.github.x0b.safdav.file.FileAccessError;
 
@@ -50,6 +52,8 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
     private boolean wrapFileNames;
     private Context context;
     private long sizeLimit;
+    private VideoPrefetchManager videoPrefetchManager;
+    private static final int STREAMING_SERVICE_PORT = 29180;
 
     public interface OnClickListener {
         void onFileClicked(FileItem fileItem);
@@ -76,6 +80,7 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
         sizeLimit = PreferenceManager.getDefaultSharedPreferences(context)
                 .getLong(context.getString(R.string.pref_key_thumbnail_size_limit),
                         context.getResources().getInteger(R.integer.default_thumbnail_size_limit));
+        videoPrefetchManager = VideoPrefetchManager.getInstance(context);
     }
 
     @NonNull
@@ -109,7 +114,11 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
         if (showThumbnails && !item.isDir()) {
             boolean localLoad = item.getRemote().getType() == RemoteItem.SAFW;
             String mimeType = item.getMimeType();
-            if ((mimeType.startsWith("image/") || mimeType.startsWith("video/")) && item.getSize() <= sizeLimit) {
+            // For images: check size limit (need to download full file)
+            // For videos: no size limit (only extract frame from cached file)
+            boolean shouldLoadThumbnail = (mimeType.startsWith("image/") && item.getSize() <= sizeLimit) ||
+                                          mimeType.startsWith("video/");
+            if (shouldLoadThumbnail) {
                 // Clear tint from theme that would overwrite the color of thumbnails
                 holder.fileIcon.setImageTintList(null);
                 RequestOptions glideOption = new RequestOptions()
@@ -140,35 +149,56 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                         pathAfterRemote = itemPath.startsWith("/") ? itemPath.substring(1) : itemPath;
                     }
 
-                    String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath +
-                                (pathAfterRemote.isEmpty() ? "" : "/" + pathAfterRemote);
-                    FLog.d(TAG, "onBindViewHolder: loading thumbnail from url=%s for file=%s (original path=%s)",
-                           url, item.getName(), itemPath);
-                    Glide
-                            .with(context)
-                            .load(new PersistentGlideUrl(url))
-                            .apply(glideOption)
-                            .addListener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
-                                @Override
-                                public boolean onLoadFailed(@androidx.annotation.Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
-                                    FLog.w(TAG, "onBindViewHolder: thumbnail load failed for %s from %s", item.getName(), url);
-                                    if (e != null) {
-                                        FLog.w(TAG, "onBindViewHolder: glide error: %s", e.getMessage());
-                                    }
-                                    holder.fileIcon.setImageResource(R.drawable.ic_file);
-                                    return false;
-                                }
+                    // Different handling for videos vs images
+                    if (mimeType.startsWith("video/")) {
+                        // Video thumbnail: use VideoThumbnailLoader.Model with VideoPrefetchManager
+                        String videoUrl = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + "/" + pathAfterRemote;
 
-                                @Override
-                                public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
-                                    // Check if holder has been recycled for a different item
-                                    if (holder.fileItem != item) {
-                                        return true; // Don't apply the loaded image
+                        Glide.with(context)
+                                .asBitmap()
+                                .load(new VideoThumbnailLoader.Model(videoUrl, item, videoPrefetchManager))
+                                .apply(glideOption)
+                                .addListener(new com.bumptech.glide.request.RequestListener<android.graphics.Bitmap>() {
+                                    @Override
+                                    public boolean onLoadFailed(@androidx.annotation.Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.Bitmap> target, boolean isFirstResource) {
+                                        holder.fileIcon.setImageResource(R.drawable.ic_file);
+                                        return false;
                                     }
-                                    return false;
-                                }
-                            })
-                            .into(holder.fileIcon);
+
+                                    @Override
+                                    public boolean onResourceReady(android.graphics.Bitmap resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.Bitmap> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                                        if (holder.fileItem != item) {
+                                            return true; // Don't apply if holder recycled
+                                        }
+                                        return false;
+                                    }
+                                })
+                                .into(holder.fileIcon);
+                    } else {
+                        // Image thumbnail: use existing PersistentGlideUrl logic
+                        String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath +
+                                    (pathAfterRemote.isEmpty() ? "" : "/" + pathAfterRemote);
+                        Glide.with(context)
+                                .load(new PersistentGlideUrl(url))
+                                .apply(glideOption)
+                                .addListener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+                                    @Override
+                                    public boolean onLoadFailed(@androidx.annotation.Nullable com.bumptech.glide.load.engine.GlideException e, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, boolean isFirstResource) {
+                                        FLog.w(TAG, "Image thumbnail load failed: %s", item.getName());
+                                        holder.fileIcon.setImageResource(R.drawable.ic_file);
+                                        return false;
+                                    }
+
+                                    @Override
+                                    public boolean onResourceReady(android.graphics.drawable.Drawable resource, Object model, com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> target, com.bumptech.glide.load.DataSource dataSource, boolean isFirstResource) {
+                                        if (holder.fileItem != item) {
+                                            return true; // Don't apply if holder recycled
+                                        }
+                                        return false;
+                                    }
+                                })
+                                .into(holder.fileIcon);
+                    }
                 }
             } else {
                 holder.fileIcon.setImageResource(R.drawable.ic_file);
