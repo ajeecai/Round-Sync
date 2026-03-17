@@ -15,6 +15,7 @@ import ca.pkay.rcloneexplorer.BroadcastReceivers.ServeCancelAction;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.Rclone;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.NotificationUtils;
 
@@ -86,7 +87,7 @@ public class StreamingService extends IntentService {
                 .addAction(R.drawable.ic_cancel_download, getString(R.string.cancel), cancelPendingIntent);
 
         if (showNotificationText) {
-            Uri uri = Uri.parse("http://127.0.0.1:" + port);
+            Uri uri = Uri.parse("http://" + RcloneServerManager.LOCALHOST + ":" + port);
             Intent webPageIntent = new Intent(Intent.ACTION_VIEW, uri);
             webPageIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             PendingIntent webPagePendingIntent = PendingIntent.getActivity(this, 0, webPageIntent, flags);

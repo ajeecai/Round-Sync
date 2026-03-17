@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import ca.pkay.rcloneexplorer.Items.FileItem;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -27,7 +28,6 @@ public class VideoPrefetchManager {
     private static final String TAG = "VideoPrefetchManager";
     private static final int PREFETCH_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
     private static final int CONCURRENT_PREFETCH_THREADS = 3;
-    private static final int STREAMING_SERVICE_PORT = 29180;
 
     private static VideoPrefetchManager instance;
     private final Context context;
@@ -334,7 +334,7 @@ public class VideoPrefetchManager {
             urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
         }
 
-        return "http://127.0.0.1:" + STREAMING_SERVICE_PORT + urlPath;
+        return "http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath;
     }
 
     /**

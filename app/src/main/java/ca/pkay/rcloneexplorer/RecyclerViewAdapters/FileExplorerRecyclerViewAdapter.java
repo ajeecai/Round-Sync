@@ -28,6 +28,7 @@ import java.util.List;
 import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.glide.VideoThumbnailLoader;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.PersistentGlideUrl;
@@ -53,7 +54,6 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
     private Context context;
     private long sizeLimit;
     private VideoPrefetchManager videoPrefetchManager;
-    private static final int STREAMING_SERVICE_PORT = 29180;
 
     public interface OnClickListener {
         void onFileClicked(FileItem fileItem);
@@ -152,7 +152,7 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                     // Different handling for videos vs images
                     if (mimeType.startsWith("video/")) {
                         // Video thumbnail: use VideoThumbnailLoader.Model with VideoPrefetchManager
-                        String videoUrl = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + "/" + pathAfterRemote;
+                        String videoUrl = "http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.STREAMING_SERVICE_PORT + "/" + pathAfterRemote;
 
                         Glide.with(context)
                                 .asBitmap()
@@ -176,7 +176,7 @@ public class FileExplorerRecyclerViewAdapter extends RecyclerView.Adapter<FileEx
                                 .into(holder.fileIcon);
                     } else {
                         // Image thumbnail: use existing PersistentGlideUrl logic
-                        String url = "http://127.0.0.1:" + serverPort + "/" + hiddenPath +
+                        String url = "http://" + RcloneServerManager.LOCALHOST + ":" + serverPort + "/" + hiddenPath +
                                     (pathAfterRemote.isEmpty() ? "" : "/" + pathAfterRemote);
                         Glide.with(context)
                                 .load(new PersistentGlideUrl(url))

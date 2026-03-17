@@ -186,7 +186,9 @@ public class RcloneRcd {
                 .append(rcUser)
                 .append(':')
                 .append(rcPass)
-                .append("@127.0.0.1:")
+                .append("@")
+                .append(RcloneServerManager.LOCALHOST)
+                .append(":")
                 .append(port)
                 .toString();
     }

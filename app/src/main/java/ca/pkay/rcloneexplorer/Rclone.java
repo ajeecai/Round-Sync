@@ -280,7 +280,7 @@ public class Rclone {
                     .build();
 
             Request request = new Request.Builder()
-                    .url("http://127.0.0.1:29181/operations/list")
+                    .url("http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.RC_API_PORT + "/operations/list")
                     .post(RequestBody.create(
                             MediaType.parse("application/json"),
                             requestBody.toString()))
@@ -773,7 +773,7 @@ public class Rclone {
         if (allowRemoteAccess) {
             address = ":" + String.valueOf(port);
         } else {
-            address = "127.0.0.1:" + String.valueOf(port);
+            address = RcloneServerManager.LOCALHOST + ":" + String.valueOf(port);
         }
 
         ArrayList<String> params = new ArrayList<>(Arrays.asList(
@@ -829,9 +829,9 @@ public class Rclone {
             if (port == RcloneServerManager.STREAMING_SERVICE_PORT) {
                 params.add("--rc");
                 params.add("--rc-addr");
-                params.add("127.0.0.1:29181");
+                params.add(RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.RC_API_PORT);
                 params.add("--rc-no-auth");
-                FLog.d(TAG, "serve: VFS cache enabled (mode=full, max-size=1G, buffer=16M), RC API enabled on :29181");
+                FLog.d(TAG, "serve: VFS cache enabled (mode=full, max-size=1G, buffer=16M), RC API enabled on :%d", RcloneServerManager.RC_API_PORT);
             } else {
                 FLog.d(TAG, "serve: VFS cache enabled (mode=full, max-size=1G, buffer=16M), RC API disabled (not video server)");
             }

@@ -7,6 +7,7 @@ import androidx.preference.PreferenceManager;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.Rclone;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.util.FLog;
 
 public class ThumbnailsLoadingService extends IntentService {
@@ -37,7 +38,7 @@ public class ThumbnailsLoadingService extends IntentService {
 
         RemoteItem remote = intent.getParcelableExtra(REMOTE_ARG);
         String hiddenPath = "/" + intent.getStringExtra(HIDDEN_PATH) + '/' + remote.getName();
-        int serverPort = intent.getIntExtra(SERVER_PORT, 29179);
+        int serverPort = intent.getIntExtra(SERVER_PORT, RcloneServerManager.THUMBNAIL_SERVICE_PORT);
         FLog.d(TAG, "onHandleIntent: hiddenPath=%s", hiddenPath);
         process = rclone.serve(Rclone.SERVE_PROTOCOL_HTTP, serverPort, false, null, null, remote, "", hiddenPath);
         if (process != null) {

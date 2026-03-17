@@ -29,6 +29,7 @@ import java.util.ArrayList;
 
 import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.R;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.PersistentGlideUrl;
 
@@ -354,7 +355,7 @@ public class MediaViewerActivity extends AppCompatActivity {
             pathAfterRemote = remotePath.startsWith("/") ? remotePath.substring(1) : remotePath;
         }
 
-        String url = "http://127.0.0.1:" + thumbnailServerPort + "/" + thumbnailServerHiddenPath +
+        String url = "http://" + RcloneServerManager.LOCALHOST + ":" + thumbnailServerPort + "/" + thumbnailServerHiddenPath +
                      (pathAfterRemote.isEmpty() ? "" : "/" + pathAfterRemote);
         FLog.d(TAG, "loadImageFromUrl: URL=%s", url);
 
@@ -434,7 +435,7 @@ public class MediaViewerActivity extends AppCompatActivity {
             urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
         }
 
-        String videoUrl = "http://127.0.0.1:" + videoServerPort + urlPath;
+        String videoUrl = "http://" + RcloneServerManager.LOCALHOST + ":" + videoServerPort + urlPath;
 
         FLog.i(TAG, "loadVideoFromUrl: URL=%s (from path: %s)", videoUrl, remotePath);
 

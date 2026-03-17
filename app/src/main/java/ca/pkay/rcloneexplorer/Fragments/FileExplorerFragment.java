@@ -128,7 +128,6 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private static final int FILE_PICKER_SYNC_RESULT = 45;
     private static final int PREFETCH_IMAGE_COUNT = 5; // Number of videos to prefetch before and after current video
     private static final long VIDEO_PREFETCH_SIZE = 10L * 1024L * 1024L; // 10MB - amount to prefetch for videos via HTTP Range (rclone chunk cache)
-    private static final int STREAMING_SERVICE_PORT = 29180; // Fixed port for persistent streaming service
     private final String SAVED_PATH = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_PATH";
     private final String SAVED_CONTENT = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SAVED_CONTENT";
     private final String SAVED_SEARCH_MODE = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SEARCH_MODE";
@@ -840,7 +839,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         byte[] values = new byte[16];
         random.nextBytes(values);
         thumbnailServerAuth = Base64.encodeToString(values, Base64.NO_PADDING | Base64.NO_WRAP | Base64.URL_SAFE);
-        thumbnailServerPort = allocatePort(29179, true);
+        thumbnailServerPort = allocatePort(RcloneServerManager.THUMBNAIL_SERVICE_PORT, true);
     }
 
     private static int allocatePort(int port, boolean allocateFallback) {
@@ -926,7 +925,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, serverPort);
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
-            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, RcloneServerManager.STREAMING_SERVICE_PORT);
             // Server now serves root directory, so no need to pass current directory path
 
             // Pass file list and current index for swipe navigation
@@ -1385,7 +1384,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, serverPort);
             intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
-            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, RcloneServerManager.STREAMING_SERVICE_PORT);
             // Server now serves root directory, so no need to pass current directory path
 
             // Pass file list and current index for swipe navigation
@@ -1834,7 +1833,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
                     }
 
-                    String url = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + urlPath;
+                    String url = ""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath;
                     FLog.i(TAG, "prewarmFirstVideoCache: sending HEAD to %s", firstVideo.getName());
 
                     OkHttpClient client = new OkHttpClient.Builder()
@@ -1930,7 +1929,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             if (!remotePath.startsWith("/")) {
                                 remotePath = "/" + remotePath;
                             }
-                            String url = "http://127.0.0.1:" + STREAMING_SERVICE_PORT + remotePath;
+                            String url = ""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + remotePath;
 
                             // Calculate range size (min of VIDEO_PREFETCH_SIZE or actual file size)
                             long rangeEnd = Math.min(VIDEO_PREFETCH_SIZE - 1, video.getSize() - 1);
@@ -2684,7 +2683,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 urlPath = remotePath.startsWith("/") ? remotePath : "/" + remotePath;
             }
 
-            Uri uri = Uri.parse("http://127.0.0.1:" + STREAMING_SERVICE_PORT + urlPath);
+            Uri uri = Uri.parse(""http://" + RcloneServerManager.LOCALHOST + ":"" + RcloneServerManager.STREAMING_SERVICE_PORT + urlPath);
             FLog.i(TAG, "StreamTask: video URL: %s (from path: %s)", uri.toString(), remotePath);
 
             String type = fileItem.getMimeType();
@@ -2701,7 +2700,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_MIME_TYPE, fileItem.getMimeType());
                 intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_PORT, thumbnailPort);
                 intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_THUMBNAIL_SERVER_HIDDEN_PATH, hiddenPath);
-                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, STREAMING_SERVICE_PORT);
+                intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, RcloneServerManager.STREAMING_SERVICE_PORT);
 
                 // Add file list for swipe navigation
                 if (recyclerViewAdapter != null) {

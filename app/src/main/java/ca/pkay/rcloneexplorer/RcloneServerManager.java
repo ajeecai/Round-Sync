@@ -11,7 +11,10 @@ import java.util.List;
  */
 public class RcloneServerManager {
     private static final String TAG = "RcloneServerManager";
-    public static final int STREAMING_SERVICE_PORT = 29180; // Global port for video streaming
+    public static final String LOCALHOST = "127.0.0.1";
+    public static final int THUMBNAIL_SERVICE_PORT = 29179;
+    public static final int STREAMING_SERVICE_PORT = 29180;
+    public static final int RC_API_PORT = 29181;
 
     private static RcloneServerManager instance;
     private Process serverProcess;
@@ -118,7 +121,7 @@ public class RcloneServerManager {
                     .build();
 
             okhttp3.Request request = new okhttp3.Request.Builder()
-                    .url("http://127.0.0.1:" + STREAMING_SERVICE_PORT + "/")
+                    .url("http://" + LOCALHOST + ":" + STREAMING_SERVICE_PORT + "/")
                     .head()
                     .build();
 

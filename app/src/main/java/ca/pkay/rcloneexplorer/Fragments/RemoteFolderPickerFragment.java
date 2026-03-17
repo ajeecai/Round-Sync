@@ -52,6 +52,7 @@ import ca.pkay.rcloneexplorer.Items.FileItem;
 import ca.pkay.rcloneexplorer.Items.RemoteItem;
 import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.Rclone;
+import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.RecyclerViewAdapters.FileExplorerRecyclerViewAdapter;
 import ca.pkay.rcloneexplorer.Services.ThumbnailsLoadingService;
 import ca.pkay.rcloneexplorer.util.FLog;
@@ -462,7 +463,7 @@ public class RemoteFolderPickerFragment extends Fragment implements   FileExplor
         byte[] values = new byte[16];
         random.nextBytes(values);
         thumbnailServerAuth = Base64.encodeToString(values, Base64.NO_PADDING | Base64.NO_WRAP | Base64.URL_SAFE);
-        thumbnailServerPort = allocatePort(29179, true);
+        thumbnailServerPort = allocatePort(RcloneServerManager.THUMBNAIL_SERVICE_PORT, true);
     }
 
     private static int allocatePort(int port, boolean allocateFallback) {
