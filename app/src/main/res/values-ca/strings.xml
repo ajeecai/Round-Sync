@@ -465,6 +465,17 @@
     <string name="pref_log_upload_pass_title">Contrasenya per carregar registres</string>
     <string name="log_upload_success">Registres carregats</string>
     <string name="log_upload_failed">Error en carregar els registres</string>
+    <string name="log_upload_error_no_url">URL de càrrega no configurada</string>
+    <string name="log_upload_error_no_logs_dir">Directori de registres no trobat</string>
+    <string name="log_upload_error_auth">Autenticació fallida: Nom d\'usuari o contrasenya incorrectes</string>
+    <string name="log_upload_error_forbidden">Accés denegat: El servidor ha refusat la sol·licitud</string>
+    <string name="log_upload_error_not_found">URL de càrrega no trobada</string>
+    <string name="log_upload_error_server">Error del servidor (%1$d): %2$s</string>
+    <string name="log_upload_error_http">Càrrega fallida (%1$d): %2$s</string>
+    <string name="log_upload_error_hostname">Error de xarxa: No es pot resoldre el nom d\'amfitrió</string>
+    <string name="log_upload_error_timeout">Error de xarxa: Temps d\'espera de connexió esgotat</string>
+    <string name="log_upload_error_network">Error de xarxa: %s</string>
+    <string name="log_upload_error_unknown">Error: %s</string>
     <string name="not_set">No establert</string>
     <string name="clear_thumbnail_cache">Esborra la memòria cau</string>
     <string name="thumbnail_cache_cleared">Totes les imatges i vídeos emmagatzemades a la memòria cau s\'han esborrat</string>

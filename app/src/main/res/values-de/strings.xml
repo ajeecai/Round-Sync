@@ -403,6 +403,17 @@
     <string name="pref_log_upload_pass_title">Passwort für Protokoll-Upload</string>
     <string name="log_upload_success">Protokolle hochgeladen</string>
     <string name="log_upload_failed">Upload der Protokolle fehlgeschlagen</string>
+    <string name="log_upload_error_no_url">Upload-URL nicht konfiguriert</string>
+    <string name="log_upload_error_no_logs_dir">Protokollverzeichnis nicht gefunden</string>
+    <string name="log_upload_error_auth">Authentifizierung fehlgeschlagen: Falscher Benutzername oder Passwort</string>
+    <string name="log_upload_error_forbidden">Zugriff verweigert: Server hat die Anfrage abgelehnt</string>
+    <string name="log_upload_error_not_found">Upload-URL nicht gefunden</string>
+    <string name="log_upload_error_server">Serverfehler (%1$d): %2$s</string>
+    <string name="log_upload_error_http">Upload fehlgeschlagen (%1$d): %2$s</string>
+    <string name="log_upload_error_hostname">Netzwerkfehler: Hostname kann nicht aufgelöst werden</string>
+    <string name="log_upload_error_timeout">Netzwerkfehler: Verbindungszeitüberschreitung</string>
+    <string name="log_upload_error_network">Netzwerkfehler: %s</string>
+    <string name="log_upload_error_unknown">Fehler: %s</string>
     <string name="not_set">Nicht festgelegt</string>
     <string name="clear_thumbnail_cache">Cache löschen</string>
     <string name="thumbnail_cache_cleared">Alle zwischengespeicherten Bilder und Videos gelöscht</string>

@@ -247,6 +247,17 @@
     <string name="pref_log_upload_pass_title">日志上传密码</string>
     <string name="log_upload_success">日志上传成功</string>
     <string name="log_upload_failed">日志上传失败</string>
+    <string name="log_upload_error_no_url">未配置上传 URL</string>
+    <string name="log_upload_error_no_logs_dir">日志目录不存在</string>
+    <string name="log_upload_error_auth">认证失败：用户名或密码错误</string>
+    <string name="log_upload_error_forbidden">访问被拒绝：服务器拒绝请求</string>
+    <string name="log_upload_error_not_found">上传 URL 不存在</string>
+    <string name="log_upload_error_server">服务器错误 (%1$d)：%2$s</string>
+    <string name="log_upload_error_http">上传失败 (%1$d)：%2$s</string>
+    <string name="log_upload_error_hostname">网络错误：无法解析主机名</string>
+    <string name="log_upload_error_timeout">网络错误：连接超时</string>
+    <string name="log_upload_error_network">网络错误：%s</string>
+    <string name="log_upload_error_unknown">错误：%s</string>
     <string name="not_set">未设置</string>
     <string name="clear_thumbnail_cache">清除缓存</string>
     <string name="thumbnail_cache_cleared">所有已缓存的图片和视频已清除</string>

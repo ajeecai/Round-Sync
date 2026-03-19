@@ -2097,20 +2097,20 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         if (getFragmentManager() != null) {
             loadingDialog.show(getChildFragmentManager(), "uploading logs");
         }
-        new AsyncTask<Void, Void, Boolean>() {
+        new AsyncTask<Void, Void, String>() {
             @Override
-            protected Boolean doInBackground(Void... voids) {
+            protected String doInBackground(Void... voids) {
                 try {
                     SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
                     String urlBase = prefs.getString(getString(R.string.pref_key_log_upload_url), "");
                     String user = prefs.getString(getString(R.string.pref_key_log_upload_username), "");
                     String pass = prefs.getString(getString(R.string.pref_key_log_upload_password), "");
-                    if (urlBase == null || urlBase.isEmpty()) return false;
+                    if (urlBase == null || urlBase.isEmpty()) return getString(R.string.log_upload_error_no_url);
                     if (!urlBase.endsWith("/")) urlBase += "/";
                     String androidId = android.provider.Settings.Secure.getString(context.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
                     String fileName = "log-" + androidId + ".txt";
                     java.io.File logsDir = context.getExternalFilesDir("logs");
-                    if (logsDir == null || !logsDir.exists()) return false;
+                    if (logsDir == null || !logsDir.exists()) return getString(R.string.log_upload_error_no_logs_dir);
                     
                     String url = urlBase + "log-" + androidId + ".txt";
                     
@@ -2188,21 +2188,53 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         rb.addHeader("Authorization", Credentials.basic(user, pass == null ? "" : pass));
                     }
                     Response resp = client.newCall(rb.build()).execute();
-                    boolean ok = resp.isSuccessful();
+                    int code = resp.code();
+                    String message = resp.message();
+                    boolean isSuccessful = resp.isSuccessful();
                     resp.close();
-                    return ok;
+
+                    if (isSuccessful) {
+                        return null; // Success
+                    } else {
+                        // Return detailed error based on HTTP status code
+                        switch (code) {
+                            case 401:
+                                return getString(R.string.log_upload_error_auth);
+                            case 403:
+                                return getString(R.string.log_upload_error_forbidden);
+                            case 404:
+                                return getString(R.string.log_upload_error_not_found);
+                            case 500:
+                            case 502:
+                            case 503:
+                                return getString(R.string.log_upload_error_server, code, message);
+                            default:
+                                return getString(R.string.log_upload_error_http, code, message);
+                        }
+                    }
+                } catch (java.net.UnknownHostException e) {
+                    FLog.e(TAG, "sendLogs: unknown host", e);
+                    return getString(R.string.log_upload_error_hostname);
+                } catch (java.net.SocketTimeoutException e) {
+                    FLog.e(TAG, "sendLogs: timeout", e);
+                    return getString(R.string.log_upload_error_timeout);
+                } catch (java.io.IOException e) {
+                    FLog.e(TAG, "sendLogs: IO error", e);
+                    return getString(R.string.log_upload_error_network, e.getMessage());
                 } catch (Exception e) {
                     FLog.e(TAG, "sendLogs: upload failed", e);
-                    return false;
+                    return getString(R.string.log_upload_error_unknown, e.getMessage());
                 }
             }
 
             @Override
-            protected void onPostExecute(Boolean success) {
+            protected void onPostExecute(String error) {
                 Dialogs.dismissSilently(loadingDialog);
-                android.widget.Toast.makeText(context,
-                        success ? R.string.log_upload_success : R.string.log_upload_failed,
-                        android.widget.Toast.LENGTH_SHORT).show();
+                if (error == null) {
+                    Toast.makeText(context, R.string.log_upload_success, Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(context, error, Toast.LENGTH_LONG).show();
+                }
             }
         }.execute();
     }

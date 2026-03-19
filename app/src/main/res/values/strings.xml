@@ -640,6 +640,17 @@
     <string name="pref_log_upload_pass_title">Log upload password</string>
     <string name="log_upload_success">Logs uploaded</string>
     <string name="log_upload_failed">Failed to upload logs</string>
+    <string name="log_upload_error_no_url">Upload URL not configured</string>
+    <string name="log_upload_error_no_logs_dir">Logs directory not found</string>
+    <string name="log_upload_error_auth">Authentication failed: Wrong username or password</string>
+    <string name="log_upload_error_forbidden">Access denied: Server refused the request</string>
+    <string name="log_upload_error_not_found">Upload URL not found</string>
+    <string name="log_upload_error_server">Server error (%1$d): %2$s</string>
+    <string name="log_upload_error_http">Upload failed (%1$d): %2$s</string>
+    <string name="log_upload_error_hostname">Network error: Cannot resolve hostname</string>
+    <string name="log_upload_error_timeout">Network error: Connection timeout</string>
+    <string name="log_upload_error_network">Network error: %s</string>
+    <string name="log_upload_error_unknown">Error: %s</string>
     <string name="not_set">Not set</string>
     <string name="intro_update_checks_title">Update Notifications</string>
     <string name="intro_update_checks_description">If you want to recieve updates, you can enable the switch below! We will notify if an update is available, and you can then choose to apply it.</string>
