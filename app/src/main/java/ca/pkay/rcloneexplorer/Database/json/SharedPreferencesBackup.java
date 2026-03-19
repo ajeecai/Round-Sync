@@ -46,6 +46,9 @@ public class SharedPreferencesBackup {
 
         // Logging
         boolean useLogs = sharedPreferences.getBoolean(context.getString(R.string.pref_key_logs), false);
+        String logUploadUrl = sharedPreferences.getString(context.getString(R.string.pref_key_log_upload_url), "");
+        String logUploadUsername = sharedPreferences.getString(context.getString(R.string.pref_key_log_upload_username), "");
+        String logUploadPassword = sharedPreferences.getString(context.getString(R.string.pref_key_log_upload_password), "");
 
 
         JSONObject main = new JSONObject();
@@ -67,6 +70,9 @@ public class SharedPreferencesBackup {
         main.put("isWrapFilenames", isWrapFilenames);
         main.put("appUpdates", appUpdates);
         main.put("useLogs", useLogs);
+        main.put("logUploadUrl", logUploadUrl);
+        main.put("logUploadUsername", logUploadUsername);
+        main.put("logUploadPassword", logUploadPassword);
 
         return main.toString();
     }
@@ -118,6 +124,9 @@ public class SharedPreferencesBackup {
 
         // Logging
         editor.putBoolean(context.getString(R.string.pref_key_logs), jsonObject.getBoolean("useLogs"));
+        editor.putString(context.getString(R.string.pref_key_log_upload_url), jsonObject.optString("logUploadUrl", ""));
+        editor.putString(context.getString(R.string.pref_key_log_upload_username), jsonObject.optString("logUploadUsername", ""));
+        editor.putString(context.getString(R.string.pref_key_log_upload_password), jsonObject.optString("logUploadPassword", ""));
 
         editor.apply();
     }
