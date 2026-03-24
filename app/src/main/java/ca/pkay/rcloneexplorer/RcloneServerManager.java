@@ -190,6 +190,53 @@ public class RcloneServerManager {
     }
 
     /**
+     * Restart the server if it's currently running.
+     * This is useful when log level changes require new rclone parameters.
+     * @param context Application context
+     */
+    public void restartServerIfRunning(Context context) {
+        if (!isServerRunning()) {
+            FLog.d(TAG, "restartServerIfRunning: server not running, nothing to restart");
+            return;
+        }
+
+        String currentRemote = servingRemoteName;
+        FLog.i(TAG, "restartServerIfRunning: restarting server for log level change (remote: %s)", currentRemote);
+
+        stopServer();
+
+        // Give it a moment to release the port
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            // ignore
+        }
+
+        // Restart with the same remote
+        if (currentRemote != null) {
+            new Thread(() -> {
+                try {
+                    Rclone rclone = new Rclone(context);
+                    List<RemoteItem> remotes = rclone.getRemotes();
+                    for (RemoteItem remote : remotes) {
+                        if (remote.getName().equals(currentRemote)) {
+                            boolean success = startServerForRemote(context, remote);
+                            if (success) {
+                                FLog.i(TAG, "restartServerIfRunning: server restarted successfully for remote: %s", currentRemote);
+                            } else {
+                                FLog.e(TAG, "restartServerIfRunning: failed to restart server for remote: %s", currentRemote);
+                            }
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    FLog.e(TAG, "restartServerIfRunning: error restarting server", e);
+                }
+            }).start();
+        }
+    }
+
+    /**
      * Start server for a specific remote (called from FileExplorerFragment)
      */
     public synchronized boolean startServerForRemote(Context context, RemoteItem remote) {

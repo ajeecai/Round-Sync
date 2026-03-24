@@ -401,6 +401,12 @@
     <string name="pref_log_upload_url_title">Server-URL für Protokoll-Upload</string>
     <string name="pref_log_upload_user_title">Benutzername für Protokoll-Upload</string>
     <string name="pref_log_upload_pass_title">Passwort für Protokoll-Upload</string>
+    <string name="pref_log_level_title">Protokollebene</string>
+    <string name="pref_log_level_summary">Protokolle nach Mindeststufe filtern</string>
+    <string name="log_level_error">Fehler</string>
+    <string name="log_level_warn">Warnung</string>
+    <string name="log_level_info">Info</string>
+    <string name="log_level_debug">Debug</string>
     <string name="log_upload_success">Protokolle hochgeladen</string>
     <string name="log_upload_failed">Upload der Protokolle fehlgeschlagen</string>
     <string name="log_upload_error_no_url">Upload-URL nicht konfiguriert</string>

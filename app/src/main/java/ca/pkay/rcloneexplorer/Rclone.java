@@ -154,7 +154,21 @@ public class Rclone {
         command.add(rcloneConf);
 
         if(loggingEnabled) {
-            command.add("-vvv");
+            // Add verbosity flags based on user's configured log level
+            String logLevel = PreferenceManager.getDefaultSharedPreferences(context)
+                    .getString(context.getString(R.string.pref_key_log_level), "error");
+            switch (logLevel) {
+                case "debug":
+                    command.add("-vvv");  // Very verbose (DEBUG level)
+                    break;
+                case "info":
+                    command.add("-v");    // Verbose (INFO level)
+                    break;
+                case "warn":
+                case "error":
+                    // No -v flag: only ERROR and NOTICE (NOTICE is like WARN)
+                    break;
+            }
         }
 
         command.addAll(args);

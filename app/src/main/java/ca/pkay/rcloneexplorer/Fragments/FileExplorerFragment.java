@@ -2123,7 +2123,26 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         
                         @Override
                         public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
-                            // Write rclone log files - stream directly from files
+                            // Get user's configured log level
+                            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                            String logLevelStr = prefs.getString(getString(R.string.pref_key_log_level), "error");
+                            int minLogLevel;
+                            switch (logLevelStr) {
+                                case "error":
+                                    minLogLevel = android.util.Log.ERROR;
+                                    break;
+                                case "warn":
+                                    minLogLevel = android.util.Log.WARN;
+                                    break;
+                                case "debug":
+                                    minLogLevel = android.util.Log.DEBUG;
+                                    break;
+                                default:
+                                    minLogLevel = android.util.Log.INFO;
+                                    break;
+                            }
+
+                            // Write rclone log files - stream directly from files with log level filtering
                             java.io.File[] files = logsDir.listFiles();
                             if (files != null && files.length > 0) {
                                 for (java.io.File f : files) {
@@ -2132,15 +2151,17 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                                     try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f))) {
                                         String line;
                                         while ((line = r.readLine()) != null) {
-                                            sink.writeUtf8(line);
-                                            sink.writeUtf8("\n");
+                                            if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeRcloneLogLine(line, minLogLevel)) {
+                                                sink.writeUtf8(line);
+                                                sink.writeUtf8("\n");
+                                            }
                                         }
                                     }
                                     sink.writeUtf8("\n\n");
                                 }
                             }
-                            
-                            // Write Android logcat - stream directly from process output
+
+                            // Write Android logcat - stream directly from process output with log level filtering
                             sink.writeUtf8("===== android_logcat.txt =====\n");
                             try {
                                 Process logcatProcess = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-v", "threadtime"});
@@ -2148,8 +2169,8 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                                 String line;
                                 String packageName = context.getPackageName();
                                 while ((line = reader.readLine()) != null) {
-                                    // Filter for relevant logs using centralized filter
-                                    if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName)) {
+                                    // Filter for relevant logs using centralized filter with log level
+                                    if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName, minLogLevel)) {
                                         sink.writeUtf8(line);
                                         sink.writeUtf8("\n");
                                     }

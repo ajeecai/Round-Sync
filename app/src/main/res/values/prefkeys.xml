@@ -35,4 +35,5 @@
     <string name="pref_key_log_upload_url" translatable="false">log_upload_url</string>
     <string name="pref_key_log_upload_username" translatable="false">log_upload_username</string>
     <string name="pref_key_log_upload_password" translatable="false">log_upload_password</string>
+    <string name="pref_key_log_level" translatable="false">log_level</string>
 </resources>

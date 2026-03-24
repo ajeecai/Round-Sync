@@ -245,6 +245,12 @@
     <string name="pref_log_upload_url_title">日志上传服务器 URL</string>
     <string name="pref_log_upload_user_title">日志上传用户名</string>
     <string name="pref_log_upload_pass_title">日志上传密码</string>
+    <string name="pref_log_level_title">日志级别</string>
+    <string name="pref_log_level_summary">按最小级别过滤日志</string>
+    <string name="log_level_error">错误</string>
+    <string name="log_level_warn">警告</string>
+    <string name="log_level_info">信息</string>
+    <string name="log_level_debug">调试</string>
     <string name="log_upload_success">日志上传成功</string>
     <string name="log_upload_failed">日志上传失败</string>
     <string name="log_upload_error_no_url">未配置上传 URL</string>

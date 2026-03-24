@@ -33,6 +33,14 @@ public abstract class FLog {
     public static final String LOGGING_MIN_LEVEL_TAG = "APP_MIN";
 
     private static final String PREF_KEY_LOGS = "pref_key_logs";
+    private static final String PREF_KEY_LOG_LEVEL = "log_level";
+
+    // Log level constants (matching Android Log levels)
+    private static final int LEVEL_ERROR = Log.ERROR;  // 6
+    private static final int LEVEL_WARN = Log.WARN;    // 5
+    private static final int LEVEL_INFO = Log.INFO;    // 4
+    private static final int LEVEL_DEBUG = Log.DEBUG;  // 3
+
     private static Context sContext;
 
     /**
@@ -55,6 +63,39 @@ public abstract class FLog {
         return prefs.getBoolean(PREF_KEY_LOGS, false);
     }
 
+    /**
+     * Get the configured minimum log level from user settings.
+     * @return Android Log level constant (ERROR, WARN, INFO, or DEBUG)
+     */
+    private static int getUserLogLevel() {
+        if (sContext == null) {
+            return LEVEL_ERROR; // Default to ERROR
+        }
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(sContext);
+        String levelStr = prefs.getString(PREF_KEY_LOG_LEVEL, "error");
+
+        switch (levelStr) {
+            case "error":
+                return LEVEL_ERROR;
+            case "warn":
+                return LEVEL_WARN;
+            case "debug":
+                return LEVEL_DEBUG;
+            case "info":
+            default:
+                return LEVEL_INFO;
+        }
+    }
+
+    /**
+     * Check if a log at the given level should be output based on user's configured minimum level.
+     * @param level The log level to check (Log.ERROR, Log.WARN, Log.INFO, Log.DEBUG)
+     * @return true if this log level should be output
+     */
+    private static boolean isLevelEnabled(int level) {
+        return level >= getUserLogLevel();
+    }
+
     public static void v(String tag, String message, Object... args) {
         if (!isUserLoggingEnabled()) {
             return;
@@ -65,7 +106,7 @@ public abstract class FLog {
     }
 
     public static void d(String tag, String message, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.DEBUG)) {
             return;
         }
         if (isLoggable(tag, Log.DEBUG)) {
@@ -74,7 +115,7 @@ public abstract class FLog {
     }
 
     public static void i(String tag, String message, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.INFO)) {
             return;
         }
         if (isLoggable(tag, Log.INFO)) {
@@ -83,7 +124,7 @@ public abstract class FLog {
     }
 
     public static void w(String tag, String message, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.WARN)) {
             return;
         }
         if (isLoggable(tag, Log.WARN)) {
@@ -92,7 +133,7 @@ public abstract class FLog {
     }
 
     public static void w(String tag, String message, Exception e, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.WARN)) {
             return;
         }
         if (isLoggable(tag, Log.WARN)) {
@@ -124,7 +165,7 @@ public abstract class FLog {
     // Callers must ensure that any potentially tainted in formatting args
     // is filtered by anonymizeArgument()
     public static void e(String tag, String message, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.ERROR)) {
             return;
         }
         if (isLoggable(tag, Log.ERROR)) {
@@ -135,7 +176,7 @@ public abstract class FLog {
     // Callers must ensure that any potentially tainted in formatting args
     // is filtered by anonymizeArgument()
     public static void e(String tag, String message, Throwable e, Object... args) {
-        if (!isUserLoggingEnabled()) {
+        if (!isUserLoggingEnabled() || !isLevelEnabled(Log.ERROR)) {
             return;
         }
         String formatted = applyFormatting(message, args);

@@ -638,6 +638,12 @@
     <string name="pref_log_upload_url_title">Log upload server URL</string>
     <string name="pref_log_upload_user_title">Log upload username</string>
     <string name="pref_log_upload_pass_title">Log upload password</string>
+    <string name="pref_log_level_title">Log level</string>
+    <string name="pref_log_level_summary">Filter logs by minimum level</string>
+    <string name="log_level_error">Error</string>
+    <string name="log_level_warn">Warning</string>
+    <string name="log_level_info">Info</string>
+    <string name="log_level_debug">Debug</string>
     <string name="log_upload_success">Logs uploaded</string>
     <string name="log_upload_failed">Failed to upload logs</string>
     <string name="log_upload_error_no_url">Upload URL not configured</string>

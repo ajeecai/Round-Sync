@@ -19,7 +19,7 @@ import java.io.InputStreamReader
 import java.util.regex.Pattern
 
 
-class LogPreferencesFragment : PreferenceFragmentCompat() {
+class LogPreferencesFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -133,8 +133,18 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
                 val outputFile = java.io.File(downloadsDir, fileName)
                 
                 val writer = java.io.BufferedWriter(java.io.FileWriter(outputFile))
-                
-                // Write rclone log files
+
+                // Get user's configured log level
+                val prefs = android.preference.PreferenceManager.getDefaultSharedPreferences(requireContext())
+                val logLevelStr = prefs.getString(getString(R.string.pref_key_log_level), "error")
+                val minLogLevel = when (logLevelStr) {
+                    "error" -> android.util.Log.ERROR
+                    "warn" -> android.util.Log.WARN
+                    "debug" -> android.util.Log.DEBUG
+                    else -> android.util.Log.INFO
+                }
+
+                // Write rclone log files with log level filtering
                 val logsDir = requireContext().getExternalFilesDir("logs")
                 if (logsDir != null && logsDir.exists()) {
                     logsDir.listFiles()?.forEach { f ->
@@ -142,25 +152,27 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
                             writer.write("===== ${f.name} =====\n")
                             f.bufferedReader().use { reader ->
                                 reader.lineSequence().forEach { line ->
-                                    writer.write(line)
-                                    writer.write("\n")
+                                    if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeRcloneLogLine(line, minLogLevel)) {
+                                        writer.write(line)
+                                        writer.write("\n")
+                                    }
                                 }
                             }
                             writer.write("\n\n")
                         }
                     }
                 }
-                
-                // Write Android logcat - filtered using centralized filter
+
+                // Write Android logcat - filtered using centralized filter with log level
                 writer.write("===== android_logcat.txt =====\n")
                 try {
                     val logcatProcess = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "threadtime"))
                     val reader = BufferedReader(InputStreamReader(logcatProcess.inputStream))
                     val packageName = requireContext().packageName
-                    
+
                     reader.lineSequence().forEach { line ->
-                        // Use centralized filter to ensure consistency with sendLogs
-                        if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName)) {
+                        // Use centralized filter with log level to ensure consistency with sendLogs
+                        if (ca.pkay.rcloneexplorer.util.LogFilterUtil.shouldIncludeLogLine(line, packageName, minLogLevel)) {
                             writer.write(line)
                             writer.write("\n")
                         }
@@ -214,6 +226,28 @@ class LogPreferencesFragment : PreferenceFragmentCompat() {
                 // Last resort: just show the full path
                 Toast.makeText(context, file.absolutePath, Toast.LENGTH_LONG).show()
             }
+        }
+    }
+
+    // Register preference change listener when fragment becomes visible
+    override fun onResume() {
+        super.onResume()
+        sharedPreferences.registerOnSharedPreferenceChangeListener(this)
+    }
+
+    // Unregister listener to prevent memory leaks when fragment is hidden
+    override fun onPause() {
+        super.onPause()
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
+    }
+
+    // Callback triggered when any preference changes (automatically called by Android)
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        // Restart rclone server when log level changes (to apply new -v parameter)
+        if (key == getString(R.string.pref_key_log_level)) {
+            FLog.i(tag(), "Log level changed, restarting rclone server...")
+            ca.pkay.rcloneexplorer.RcloneServerManager.getInstance().restartServerIfRunning(requireContext())
+            Toast.makeText(context, "Log level changed, restarting rclone server...", Toast.LENGTH_SHORT).show()
         }
     }
 }
