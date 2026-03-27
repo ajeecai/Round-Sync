@@ -1361,7 +1361,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         } else if (pathStack.isEmpty()) {
             return false;
         }
-        if (!isInMoveMode && !recyclerViewAdapter.isInSelectMode()) {
+        if (!isGalleryMode && !isInMoveMode && !recyclerViewAdapter.isInSelectMode()) {
             fab.show();
         }
         if (fetchDirectoryTask != null) {
@@ -1379,18 +1379,28 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             directoryObject.restoreFromCache(path);
             sortDirectory();
             recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
+            if (isGalleryMode && galleryAdapter != null) {
+                galleryAdapter.setData(directoryObject.getDirectoryContent());
+            }
             if (directoryPosition.containsKey(directoryObject.getCurrentPath())) {
                 int position = directoryPosition.get(directoryObject.getCurrentPath());
-                recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                if (!isGalleryMode) {
+                    recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                }
             }
             fetchDirectoryTask = new FetchDirectoryContent(true).execute();
         } else if (directoryObject.isPathInCache(path)) {
             directoryObject.restoreFromCache(path);
             sortDirectory();
             recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
+            if (isGalleryMode && galleryAdapter != null) {
+                galleryAdapter.setData(directoryObject.getDirectoryContent());
+            }
             if (directoryPosition.containsKey(directoryObject.getCurrentPath())) {
                 int position = directoryPosition.get(directoryObject.getCurrentPath());
-                recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                if (!isGalleryMode) {
+                    recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                }
             }
         } else {
             directoryObject.setPath(path);
@@ -1683,7 +1693,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         if (isSearchMode) {
             searchClicked();
         }
-        if (!isInMoveMode && !recyclerViewAdapter.isInSelectMode()) {
+        if (!isGalleryMode && !isInMoveMode && !recyclerViewAdapter.isInSelectMode()) {
             fab.show();
         }
         if (directoryObject.getCurrentPath().equals(path)) {
@@ -1706,18 +1716,28 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             directoryObject.restoreFromCache(path);
             sortDirectory();
             recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
+            if (isGalleryMode && galleryAdapter != null) {
+                galleryAdapter.setData(directoryObject.getDirectoryContent());
+            }
             if (directoryPosition.containsKey(directoryObject.getCurrentPath())) {
                 int position = directoryPosition.get(directoryObject.getCurrentPath());
-                recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                if (!isGalleryMode) {
+                    recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                }
             }
             fetchDirectoryTask = new FetchDirectoryContent(true).execute();
         } else if (directoryObject.isPathInCache(path)) {
             directoryObject.restoreFromCache(path);
             sortDirectory();
             recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
+            if (isGalleryMode && galleryAdapter != null) {
+                galleryAdapter.setData(directoryObject.getDirectoryContent());
+            }
             if (directoryPosition.containsKey(directoryObject.getCurrentPath())) {
                 int position = directoryPosition.get(directoryObject.getCurrentPath());
-                recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                if (!isGalleryMode) {
+                    recyclerViewLinearLayoutManager.scrollToPositionWithOffset(position, 10);
+                }
             }
         } else {
             fetchDirectoryTask = new FetchDirectoryContent().execute();
@@ -2662,7 +2682,12 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
                 // Pass file list and current index for swipe navigation
                 if (directoryObject != null && currentFileItem != null) {
-                    java.util.List<FileItem> files = directoryObject.getDirectoryContent();
+                    java.util.List<FileItem> files;
+                    if (isGalleryMode && galleryAdapter != null) {
+                        files = galleryAdapter.getMediaItems();
+                    } else {
+                        files = directoryObject.getDirectoryContent();
+                    }
                     if (files != null && !files.isEmpty()) {
                         // Find current index
                         int currentIndex = -1;
@@ -2857,12 +2882,20 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_VIDEO_SERVER_PORT, RcloneServerManager.STREAMING_SERVICE_PORT);
 
                 // Add file list for swipe navigation
-                if (recyclerViewAdapter != null) {
-                    int currentIndex = recyclerViewAdapter.getCurrentContent().indexOf(fileItem);
-                    if (currentIndex >= 0) {
-                        intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
-                                new java.util.ArrayList<>(recyclerViewAdapter.getCurrentContent()));
-                        intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                if (directoryObject != null) {
+                    java.util.List<FileItem> files;
+                    if (isGalleryMode && galleryAdapter != null) {
+                        files = galleryAdapter.getMediaItems();
+                    } else {
+                        files = directoryObject.getDirectoryContent();
+                    }
+                    if (files != null && !files.isEmpty()) {
+                        int currentIndex = files.indexOf(fileItem);
+                        if (currentIndex >= 0) {
+                            intent.putParcelableArrayListExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_FILE_ITEMS,
+                                    new java.util.ArrayList<>(files));
+                            intent.putExtra(ca.pkay.rcloneexplorer.Activities.MediaViewerActivity.EXTRA_CURRENT_INDEX, currentIndex);
+                        }
                     }
                 }
             } else {
