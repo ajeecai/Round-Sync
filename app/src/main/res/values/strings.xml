@@ -12,6 +12,8 @@
     <string name="export_rclone_config">Export config</string>
     <string name="about">About</string>
     <string name="sort">Sort</string>
+    <string name="gallery_view">Gallery view</string>
+    <string name="list_view">List view</string>
     <string name="select_all">Select all</string>
     <string name="serve">Serve…</string>
     <string name="download">Download</string>

@@ -47,6 +47,7 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -90,6 +91,7 @@ import ca.pkay.rcloneexplorer.R;
 import ca.pkay.rcloneexplorer.Rclone;
 import ca.pkay.rcloneexplorer.RcloneServerManager;
 import ca.pkay.rcloneexplorer.RecyclerViewAdapters.FileExplorerRecyclerViewAdapter;
+import ca.pkay.rcloneexplorer.RecyclerViewAdapters.GalleryAdapter;
 import ca.pkay.rcloneexplorer.Services.StreamingService;
 import ca.pkay.rcloneexplorer.Services.ThumbnailsLoadingService;
 import ca.pkay.rcloneexplorer.util.ActivityHelper;
@@ -138,6 +140,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private final String SAVED_MOVE_START_PATH = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_MOVE_START_PATH";
     private final String SAVED_SYNC_DIRECTION = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SYNC_DIRECTION";
     private final String SAVED_SYNC_REMOTE_PATH = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_SYNC_REMOTE_PATH";
+    private final String SAVED_GALLERY_MODE = "ca.pkay.rcexplorer.FILE_EXPLORER_FRAG_GALLERY_MODE";
     private String originalToolbarTitle;
     private Stack<String> pathStack;
     private Map<String, Integer> directoryPosition;
@@ -151,8 +154,12 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private RemoteItem remote;
     private String remoteName;
     private FileExplorerRecyclerViewAdapter recyclerViewAdapter;
+    private GalleryAdapter galleryAdapter;
     private LinearLayoutManager recyclerViewLinearLayoutManager;
     private SwipeRefreshLayout swipeRefreshLayout;
+    private RecyclerView recyclerView;
+    private boolean isGalleryMode;
+    private MenuItem menuToggleView;
     private View searchBar;
     private View searchButton;
     private View searchClear;
@@ -288,7 +295,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
         Context context = view.getContext();
 
-        RecyclerView recyclerView = view.findViewById(R.id.file_explorer_list);
+        recyclerView = view.findViewById(R.id.file_explorer_list);
         recyclerViewLinearLayoutManager = new LinearLayoutManager(context);
 
         // Optimize scrolling performance with prefetch
@@ -303,6 +310,18 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         recyclerViewAdapter.showThumbnails(showThumbnails);
         recyclerViewAdapter.setWrapFileNames(wrapFilenames);
         recyclerView.setAdapter(recyclerViewAdapter);
+
+        // Initialize gallery adapter
+        galleryAdapter = new GalleryAdapter(context, new GalleryAdapter.OnMediaClickListener() {
+            @Override
+            public void onMediaClicked(FileItem fileItem) {
+                onFileClicked(fileItem);
+            }
+            @Override
+            public String[] getThumbnailServerParams() {
+                return FileExplorerFragment.this.getThumbnailServerParams();
+            }
+        });
 
         // Initialize VideoPrefetchManager
         videoPrefetchManager = VideoPrefetchManager.getInstance(context);
@@ -447,6 +466,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         outState.putParcelable(SAVED_RENAME_ITEM, renameItem);
         outState.putBoolean(SAVED_START_AT_BOOT, startAtRoot);
         outState.putInt(SAVED_SYNC_DIRECTION, syncDirection);
+        outState.putBoolean(SAVED_GALLERY_MODE, isGalleryMode);
         if (isSearchMode) {
             outState.putString(SAVED_SEARCH_STRING, searchString);
         }
@@ -501,6 +521,12 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         moveStartPath = savedInstanceState.getString(SAVED_MOVE_START_PATH);
         syncDirection = savedInstanceState.getInt(SAVED_SYNC_DIRECTION, -1);
         syncRemotePath = savedInstanceState.getString(SAVED_SYNC_REMOTE_PATH);
+
+        if (savedInstanceState.getBoolean(SAVED_GALLERY_MODE, false)) {
+            // Restore gallery mode - set flag to false so toggleViewMode() flips it to true
+            isGalleryMode = false;
+            toggleViewMode();
+        }
     }
 
     private void setFabBehaviour(boolean enableSnackBarBehaviour) {
@@ -523,6 +549,63 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             title = remote.getTypeReadable();
         }
         ((FragmentActivity) context).setTitle(title);
+    }
+
+    private RecyclerView.ItemDecoration gallerySpacingDecoration;
+
+    private void toggleViewMode() {
+        isGalleryMode = !isGalleryMode;
+        if (isGalleryMode) {
+            // Switch to gallery grid mode
+            int spanCount = 4;
+            GridLayoutManager gridLayoutManager = new GridLayoutManager(context, spanCount);
+            gridLayoutManager.setSpanSizeLookup(galleryAdapter.getSpanSizeLookup(spanCount));
+            recyclerView.setLayoutManager(gridLayoutManager);
+
+            // Add spacing between grid items
+            if (gallerySpacingDecoration == null) {
+                final int spacing = (int) (2 * context.getResources().getDisplayMetrics().density); // 2dp
+                gallerySpacingDecoration = new RecyclerView.ItemDecoration() {
+                    @Override
+                    public void getItemOffsets(@NonNull android.graphics.Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                        int position = parent.getChildAdapterPosition(view);
+                        if (position < 0) return;
+                        if (galleryAdapter.getItemViewType(position) == 0) {
+                            // Date header: no horizontal spacing
+                            outRect.set(0, 0, 0, 0);
+                        } else {
+                            outRect.set(spacing, spacing, spacing, spacing);
+                        }
+                    }
+                };
+            }
+            recyclerView.addItemDecoration(gallerySpacingDecoration);
+
+            galleryAdapter.setData(directoryObject.getDirectoryContent());
+            recyclerView.setAdapter(galleryAdapter);
+            fab.hide();
+            fab.setVisibility(View.INVISIBLE);
+            if (menuToggleView != null) {
+                menuToggleView.setIcon(R.drawable.ic_list_view);
+                menuToggleView.setTitle(R.string.list_view);
+            }
+        } else {
+            // Switch back to list mode
+            if (gallerySpacingDecoration != null) {
+                recyclerView.removeItemDecoration(gallerySpacingDecoration);
+            }
+            recyclerView.setLayoutManager(recyclerViewLinearLayoutManager);
+            recyclerView.setAdapter(recyclerViewAdapter);
+            recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
+            if (!isInMoveMode) {
+                fab.show();
+                fab.setVisibility(View.VISIBLE);
+            }
+            if (menuToggleView != null) {
+                menuToggleView.setIcon(R.drawable.ic_photo_library);
+                menuToggleView.setTitle(R.string.gallery_view);
+            }
+        }
     }
 
     private void buildStackFromPath(String remote, String path) {
@@ -640,6 +723,11 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         menuGoTo = menu.findItem(R.id.action_go_to);
         menuLink = menu.findItem(R.id.action_link);
         menuHttpServe = menu.findItem(R.id.action_serve);
+        menuToggleView = menu.findItem(R.id.action_toggle_view);
+        if (isGalleryMode) {
+            menuToggleView.setIcon(R.drawable.ic_list_view);
+            menuToggleView.setTitle(R.string.list_view);
+        }
         menuEmptyTrash = menu.findItem(R.id.action_empty_trash);
 
         if (!remote.hasTrashCan()) {
@@ -687,6 +775,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         int id = item.getItemId();
 
         switch (id) {
+            case R.id.action_toggle_view:
+                toggleViewMode();
+                return true;
             case R.id.action_sort:
                 showSortMenu();
                 return true;
@@ -1388,7 +1479,13 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
 
             // Pass file list and current index for swipe navigation
             if (directoryObject != null) {
-                java.util.List<FileItem> files = directoryObject.getDirectoryContent();
+                java.util.List<FileItem> files;
+                if (isGalleryMode && galleryAdapter != null) {
+                    // In gallery mode, use gallery-sorted (media-only, newest-first) list
+                    files = galleryAdapter.getMediaItems();
+                } else {
+                    files = directoryObject.getDirectoryContent();
+                }
                 if (files != null && !files.isEmpty()) {
                     int currentIndex = files.indexOf(fileItem);
                     if (currentIndex >= 0) {
@@ -2332,6 +2429,11 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                         recyclerViewAdapter.newData(directoryObject.getDirectoryContent());
                     }
                 }
+            }
+
+            // Update gallery adapter data
+            if (galleryAdapter != null) {
+                galleryAdapter.setData(directoryObject.getDirectoryContent());
             }
 
             // Prewarm serve http's dir cache by HEAD requesting the first video file
