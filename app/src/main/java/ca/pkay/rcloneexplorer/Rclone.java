@@ -266,17 +266,9 @@ public class Rclone {
                 remote.getName(), path, startAtRoot);
 
         try {
-            // Build remote path for RC API
-            // path format: "//remoteName/dir1/dir2" or "//remoteName" (root)
-            // RC API expects: "dir1/dir2" or "" (for root)
-            String remotePath = "";
-            String rootPrefix = "//" + remote.getName();
-            if (path.compareTo(rootPrefix) != 0) {
-                // Extract everything after "//remoteName/"
-                if (path.startsWith(rootPrefix + "/")) {
-                    remotePath = path.substring(rootPrefix.length() + 1);
-                }
-            }
+            // Convert path to RC API remote parameter.
+            // Only the initial root entry uses "//remoteName"; after that, paths are relative (e.g. "DCIM").
+            String remotePath = path.equals("//" + remote.getName()) ? "" : path;
 
             android.util.Log.i("Rclone", "==== RC_API ==== remotePath='" + remotePath + "', path='" + path + "'");
             FLog.i(TAG, "getDirectoryContent: remotePath=%s (extracted from path=%s)", remotePath, path);
@@ -356,13 +348,11 @@ public class Rclone {
                 // RC API returns Path relative to remote root (fs parameter)
                 // e.g., when querying fs=crypt: remote="", Path="DCIM" (at root)
                 // e.g., when querying fs=crypt: remote="DCIM", Path="DCIM/file.jpg" (in subdir)
-                // We must match the legacy lsjson format:
-                // - At root: filePath = "//crypt/DCIM"
-                // - In DCIM: filePath = "//crypt/DCIM/file.jpg"
+                // These are already correct relative paths that work directly with
+                // rclone CLI commands (e.g. crypt:DCIM/file.jpg).
                 String rcPath = jsonObject.getString("Path");
                 String fileName = jsonObject.getString("Name");
-                // Always include the full path starting with //remoteName
-                String filePath = path + "/" + fileName;
+                String filePath = rcPath;
                 android.util.Log.i("Rclone", "==== RC_API ==== item: Name=" + fileName + " Path=" + rcPath + " -> filePath=" + filePath);
                 long fileSize = jsonObject.getLong("Size");
                 String fileModTime = jsonObject.getString("ModTime");
@@ -920,7 +910,16 @@ public class Rclone {
         String[] command;
         String remoteName = remoteItem.getName();
         String localRemotePath = (remoteItem.isRemoteType(RemoteItem.LOCAL)) ? getLocalRemotePathPrefix(remoteItem, context)  + "/" : "";
-        String remoteSection = (remotePath.compareTo("//" + remoteName) == 0) ? remoteName + ":" + localRemotePath : remoteName + ":" + localRemotePath + remotePath;
+        
+        String cleanRemotePath = remotePath;
+        if (remotePath != null) {
+            if (remotePath.equals("//" + remoteName)) {
+                cleanRemotePath = "";
+            } else if (remotePath.startsWith("//" + remoteName + "/")) {
+                cleanRemotePath = remotePath.substring(remoteName.length() + 3);
+            }
+        }
+        String remoteSection = cleanRemotePath.isEmpty() ? remoteName + ":" + localRemotePath : remoteName + ":" + localRemotePath + cleanRemotePath;
 
         ArrayList<String> defaultParameter = new ArrayList<>(Arrays.asList("--transfers", "1", "--stats=1s", "--stats-log-level", "NOTICE", "--use-json-log"));
         ArrayList<String> directionParameter = new ArrayList<>();
