@@ -12,6 +12,7 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import ca.pkay.rcloneexplorer.Settings.ArchivePreferencesFragment;
 import ca.pkay.rcloneexplorer.Settings.FileAccessPreferencesFragment;
 import ca.pkay.rcloneexplorer.Settings.FileAccessSettingsFragment;
 import ca.pkay.rcloneexplorer.Settings.LogPreferencesFragment;
@@ -96,6 +97,8 @@ public class SettingsActivity extends AppCompatActivity implements SettingsFragm
             startNotificationSettingsFragment();
         } else if (fragment instanceof LogPreferencesFragment) {
             startLoggingSettingsActivity();
+        } else if (fragment instanceof ArchivePreferencesFragment) {
+            startArchiveSettingsFragment();
         }
     }
 
@@ -142,23 +145,33 @@ public class SettingsActivity extends AppCompatActivity implements SettingsFragm
         transaction.commit();
     }
 
+    private void startArchiveSettingsFragment() {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.replace(R.id.flFragment, new ArchivePreferencesFragment(), SAVED_FRAGMENT);
+        transaction.addToBackStack(null);
+        transaction.commit();
+    }
+
     @Override
-    public void onSettingCategoryClicked(int category) {
+    public void onSettingCategoryClicked(SettingsFragment.Category category) {
         switch (category) {
-            case SettingsFragment.GENERAL_SETTINGS:
+            case GENERAL:
                 startGeneralSettingsFragment();
                 break;
-            case SettingsFragment.FILE_ACCESS_SETTINGS:
+            case FILE_ACCESS:
                 startFileAccessSettingsFragment();
                 break;
-            case SettingsFragment.LOOK_AND_FEEL_SETTINGS:
+            case LOOK_AND_FEEL:
                 startLookAndFeelSettingsFragment();
                 break;
-            case SettingsFragment.LOGGING_SETTINGS:
+            case LOGGING:
                 startLoggingSettingsActivity();
                 break;
-            case SettingsFragment.NOTIFICATION_SETTINGS:
+            case NOTIFICATION:
                 startNotificationSettingsFragment();
+                break;
+            case ARCHIVE:
+                startArchiveSettingsFragment();
                 break;
         }
     }

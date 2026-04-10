@@ -428,6 +428,16 @@
         <item quantity="one">%s was uploaded!</item>
         <item quantity="other">%s Files were uploaded!</item>
     </plurals>
+    <plurals name="worker_archive_success_message">
+        <item quantity="zero">Nothing was archived.</item>
+        <item quantity="one">%s was archived!</item>
+        <item quantity="other">%s Files were archived!</item>
+    </plurals>
+    <plurals name="worker_upload_archive_success_message">
+        <item quantity="zero">Nothing was archived.</item>
+        <item quantity="one">%s was uploaded and archived!</item>
+        <item quantity="other">%s Files were uploaded and archived!</item>
+    </plurals>
 
     <string name="abi_not_supported_arm_downgrade">Unfortunately, this Round Sync version is not compatible with your device. Try the armeabi-v7a APK from github.com/newhinton/Round-Sync/releases/latest.</string>
     <string name="abi_not_supported">Your device does not support this version of Round Sync.</string>
@@ -582,6 +592,8 @@
     <string name="delete_service_notification_description">This notification shows deletions</string>
     <string name="move_service_notification_title">Moves</string>
     <string name="move_service_notification_description">This notification shows moves</string>
+    <string name="archive_service_notification_title">Archive</string>
+    <string name="archive_service_notification_description">This notification shows archive progress</string>
     <string name="worker_deleting_initialtitle">Deleting…</string>
     <string name="worker_deleting_success">Deleted!</string>
     <string name="worker_deleting_failed">Failed to delete files or folders!</string>
@@ -662,4 +674,70 @@
     <string name="not_set">Not set</string>
     <string name="intro_update_checks_title">Update Notifications</string>
     <string name="intro_update_checks_description">If you want to recieve updates, you can enable the switch below! We will notify if an update is available, and you can then choose to apply it.</string>
+    <!-- File Archive -->
+    <string name="archive">Archive</string>
+    <string name="archive_files">Archive files</string>
+    <string name="archive_by_year">By Year (e.g. 2022)</string>
+    <string name="archive_by_month">By Month (e.g. 2022-10)</string>
+    <string name="archive_root_label">Archive to: %s</string>
+    <string name="archive_settings">File Archive</string>
+    <string name="archive_settings_description">Configure archive directory and duplicate handling</string>
+    <string name="archive_root_directory">Archive root directory</string>
+    <string name="archive_root_summary">Relative path on remote. Empty = remote root</string>
+    <string name="archive_duplicate_detection">Duplicate detection</string>
+    <string name="archive_duplicate_action">When duplicate found</string>
+    <string name="archive_source_action">Source files after archive</string>
+    <string name="archive_progress">Archiving %1$d/%2$d: %3$s</string>
+    <string name="upload">Upload</string>
+    <string name="archive_on_upload">Archive uploaded files by date</string>
+    <string name="archive_on_upload_prompt">Archive uploaded files by date?</string>
+    <string name="worker_archive_initialtitle">Archiving…</string>
+    <string name="worker_archive_success">Archive complete</string>
+    <string name="worker_archive_failed">Archive failed</string>
+    <string name="worker_archive_cancelled">%1$s archive cancelled</string>
+    <string name="archive_unknown_date_folder">unknown</string>
+    <string name="archive_edit_root_title">Edit archive root for %s</string>
+    <string name="upload_standard">Standard Upload</string>
+    <string name="upload_archive">Archive Upload</string>
+    <string name="archive_keep_running">Keep Running</string>
+    <string name="archive_cancel_task_desc">Cancel this task</string>
+    <string name="archive_cancel_confirmation">Are you sure you want to cancel the archive task for %1$s?</string>
+    <string name="no_tasks">No active archival tasks</string>
+    <string name="waiting">Waiting...</string>
+    <string name="archive_too_many_files">Archive aborted: Exceeds limit of %1$d files to prevent memory issues.</string>
+
+    <string-array name="archive_duplicate_detection_entries">
+        <item>By filename</item>
+        <item>By MD5 hash</item>
+    </string-array>
+    <string-array name="archive_duplicate_detection_values">
+        <item>FILENAME</item>
+        <item>MD5</item>
+    </string-array>
+
+    <string-array name="archive_duplicate_action_entries">
+        <item>Skip</item>
+        <item>Overwrite</item>
+        <item>Rename (add suffix)</item>
+    </string-array>
+    <string-array name="archive_duplicate_action_values">
+        <item>SKIP</item>
+        <item>OVERWRITE</item>
+        <item>RENAME</item>
+    </string-array>
+
+    <string-array name="archive_source_action_entries">
+        <item>Delete source</item>
+        <item>Keep source</item>
+    </string-array>
+    <string-array name="archive_source_action_values">
+        <item>DELETE</item>
+        <item>KEEP</item>
+    </string-array>
+
+    <!-- Preference Keys (internal, not translatable) -->
+    <string name="pref_key_archive_duplicate_detection" translatable="false">pref_key_archive_duplicate_detection</string>
+    <string name="pref_key_archive_duplicate_action" translatable="false">pref_key_archive_duplicate_action</string>
+    <string name="pref_key_archive_source_action" translatable="false">pref_key_archive_source_action</string>
+
 </resources>

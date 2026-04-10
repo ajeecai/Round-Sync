@@ -31,6 +31,7 @@ import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+import android.widget.RadioGroup;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -98,7 +99,9 @@ import ca.pkay.rcloneexplorer.util.ActivityHelper;
 import ca.pkay.rcloneexplorer.util.FLog;
 import ca.pkay.rcloneexplorer.util.LargeParcel;
 import ca.pkay.rcloneexplorer.util.VideoPrefetchManager;
+import ca.pkay.rcloneexplorer.archive.ArchiveConfig;
 import ca.pkay.rcloneexplorer.workmanager.EphemeralTaskManager;
+import ca.pkay.rcloneexplorer.archive.ArchiveTaskLauncher;
 import ca.pkay.rcloneexplorer.workmanager.SyncManager;
 import de.felixnuesse.ui.BreadcrumbView;
 import es.dmoral.toasty.Toasty;
@@ -146,6 +149,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private Map<String, Integer> directoryPosition;
     private DirectoryObject directoryObject;
     private List<FileItem> moveList;
+    private MenuItem archiveStatusMenuItem;
     private String moveStartPath;
     private List<FileItem> downloadList;
     private FileItem renameItem;
@@ -679,14 +683,45 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         if (requestCode == FILE_PICKER_UPLOAD_RESULT && resultCode == FragmentActivity.RESULT_OK) {
             @SuppressWarnings("unchecked")
             ArrayList<File> result = (ArrayList<File>) data.getSerializableExtra(FilePicker.FILE_PICKER_RESULT);
-            ArrayList<String> uploadList = new ArrayList<>();
+            final ArrayList<String> uploadList = new ArrayList<>();
             for (File file : result) {
                 uploadList.add(file.getPath());
             }
 
-            for (String uploadFile : uploadList) {
-                EphemeralTaskManager.Companion.queueUpload(this.context, remote, uploadFile, directoryObject.getCurrentPath());
-            }
+            final String currentPath = directoryObject.getCurrentPath();
+
+            View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_upload_archive, null);
+            RadioGroup actionGroup = dialogView.findViewById(R.id.upload_action_group);
+            final View archiveOptions = dialogView.findViewById(R.id.archive_options_container);
+            final RadioGroup granularityGroup = dialogView.findViewById(R.id.upload_granularity_group);
+
+            actionGroup.setOnCheckedChangeListener((group, checkedId) -> {
+                if (checkedId == R.id.radio_archive) {
+                    archiveOptions.setVisibility(View.VISIBLE);
+                } else {
+                    archiveOptions.setVisibility(View.GONE);
+                }
+            });
+
+            new AlertDialog.Builder(context)
+                    .setTitle(R.string.upload)
+                    .setView(dialogView)
+                    .setPositiveButton(R.string.ok, (dialog, which) -> {
+                        int checkedActionId = actionGroup.getCheckedRadioButtonId();
+                        if (checkedActionId == R.id.radio_standard_upload) {
+                            for (String uploadFile : uploadList) {
+                                EphemeralTaskManager.Companion.queueUpload(context, remote, uploadFile, currentPath);
+                            }
+                        } else if (checkedActionId == R.id.radio_archive) {
+                            int checkedGranularityId = granularityGroup.getCheckedRadioButtonId();
+                            ArchiveConfig.Granularity granularity = (checkedGranularityId == R.id.radio_upload_year) 
+                                    ? ArchiveConfig.Granularity.YEAR : ArchiveConfig.Granularity.MONTH;
+                            ArchiveTaskLauncher.queueUploadArchive(context, remote, uploadList, granularity);
+                        }
+                    })
+                    .setNegativeButton(R.string.cancel, null)
+                    .show();
+
         } else if (requestCode == FILE_PICKER_DOWNLOAD_RESULT) {
             if (resultCode != FragmentActivity.RESULT_OK) {
                 downloadList.clear();
@@ -719,8 +754,14 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.file_explorer_folder_menu, menu);
+        inflater.inflate(R.menu.menu_archive_status, menu);
         menuSelectAll = menu.findItem(R.id.action_select_all);
         menuGoTo = menu.findItem(R.id.action_go_to);
+        archiveStatusMenuItem = menu.findItem(R.id.action_archive_status);
+        if (archiveStatusMenuItem != null && archiveStatusMenuItem.getActionView() != null) {
+            archiveStatusMenuItem.getActionView().setOnClickListener(v -> showArchiveProgressDialog());
+        }
+        observeArchiveTasks();
         menuLink = menu.findItem(R.id.action_link);
         menuHttpServe = menu.findItem(R.id.action_serve);
         menuToggleView = menu.findItem(R.id.action_toggle_view);
@@ -771,8 +812,13 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
+
+        if (id == R.id.action_archive_status) {
+            showArchiveProgressDialog();
+            return true;
+        }
 
         switch (id) {
             case R.id.action_toggle_view:
@@ -1063,6 +1109,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             renameFiles();
         });
 
+        view.findViewById(R.id.file_archive).setOnClickListener(v -> archiveFilesSelected(recyclerViewAdapter.getSelectedItems()));
         view.findViewById(R.id.file_delete).setOnClickListener(v -> deleteFiles(recyclerViewAdapter.getSelectedItems()));
         view.findViewById(R.id.cancel_move).setOnClickListener(v -> cancelMoveClicked());
         view.findViewById(R.id.select_move).setOnClickListener(v -> moveLocationSelected());
@@ -1174,7 +1221,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             path2 = "//" + remoteName;
         }
         for (FileItem moveItem : moveList) {
-            EphemeralTaskManager.Companion.queueMove(this.context, remote, directoryObject.getCurrentPath(), moveItem, path2);
+            EphemeralTaskManager.Companion.queueMove(this.context, remote, directoryObject.getCurrentPath(), moveItem, moveItem.getName());
         }
         Toasty.info(context, getString(R.string.moving_info), Toast.LENGTH_SHORT, true).show();
         moveList.clear();
@@ -1661,6 +1708,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 case R.id.action_sync:
                     showSyncDialog(fileItem.getPath());
                     break;
+                case R.id.action_archive:
+                    archiveFilesSelected(Collections.singletonList(fileItem));
+                    break;
                 default:
                     return false;
             }
@@ -1848,6 +1898,177 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         fab.hide();
         fab.setVisibility(View.INVISIBLE);
         setFabBehaviour(false);
+    }
+
+    private void archiveFilesSelected(List<FileItem> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        showArchiveDialog(items);
+    }
+
+    private void showArchiveDialog(List<FileItem> items) {
+        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_archive, null);
+        final RadioGroup granularityGroup = dialogView.findViewById(R.id.archive_granularity_group);
+
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.archive_files)
+                .setView(dialogView)
+                .setPositiveButton(R.string.ok, (dialog, which) -> {
+                    int checkedId = granularityGroup.getCheckedRadioButtonId();
+                    ArchiveConfig.Granularity granularity = (checkedId == R.id.radio_year) ? ArchiveConfig.Granularity.YEAR : ArchiveConfig.Granularity.MONTH;
+                    ArchiveTaskLauncher.queueArchive(context, remote, items, granularity);
+                    recyclerViewAdapter.cancelSelection();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void observeArchiveTasks() {
+        if (context == null || archiveStatusMenuItem == null) return;
+        androidx.work.WorkManager.getInstance(context)
+                .getWorkInfosByTagLiveData(ArchiveTaskLauncher.ARCHIVE_TASK_TAG)
+                .observe(getViewLifecycleOwner(), workInfos -> {
+                    boolean isRunning = false;
+                    if (workInfos != null) {
+                        for (androidx.work.WorkInfo info : workInfos) {
+                            if (info.getState() == androidx.work.WorkInfo.State.RUNNING || 
+                                info.getState() == androidx.work.WorkInfo.State.ENQUEUED) {
+                                isRunning = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (archiveStatusMenuItem != null) {
+                        archiveStatusMenuItem.setVisible(isRunning);
+                    }
+                });
+    }
+
+    private void showArchiveProgressDialog() {
+        if (context == null) return;
+
+        View dialogView = LayoutInflater.from(context).inflate(R.layout.dialog_archive_tasks, null);
+        RecyclerView recyclerView = dialogView.findViewById(R.id.rv_archive_tasks);
+        View noTasksText = dialogView.findViewById(R.id.no_tasks_text);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(context));
+        ArchiveTaskAdapter adapter = new ArchiveTaskAdapter();
+        recyclerView.setAdapter(adapter);
+
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.archive_settings)
+                .setView(dialogView)
+                .setPositiveButton(R.string.archive_keep_running, null)
+                .show();
+
+        androidx.work.WorkManager.getInstance(context)
+                .getWorkInfosByTagLiveData(ArchiveTaskLauncher.ARCHIVE_TASK_TAG)
+                .observe(getViewLifecycleOwner(), workInfos -> {
+                    List<androidx.work.WorkInfo> activeInfos = new ArrayList<>();
+                    if (workInfos != null) {
+                        for (androidx.work.WorkInfo info : workInfos) {
+                            if (info.getState() == androidx.work.WorkInfo.State.RUNNING ||
+                                    info.getState() == androidx.work.WorkInfo.State.ENQUEUED) {
+                                activeInfos.add(info);
+                            }
+                        }
+                    }
+
+                    if (activeInfos.isEmpty()) {
+                        noTasksText.setVisibility(View.VISIBLE);
+                        recyclerView.setVisibility(View.GONE);
+                        // Optional: close dialog if no tasks left
+                        // dialog.dismiss();
+                    } else {
+                        noTasksText.setVisibility(View.GONE);
+                        recyclerView.setVisibility(View.VISIBLE);
+                        adapter.setWorkInfos(activeInfos);
+                    }
+                });
+    }
+
+    private class ArchiveTaskAdapter extends RecyclerView.Adapter<ArchiveTaskAdapter.ViewHolder> {
+        private List<androidx.work.WorkInfo> workInfos = new ArrayList<>();
+
+        @SuppressLint("NotifyDataSetChanged")
+        void setWorkInfos(List<androidx.work.WorkInfo> workInfos) {
+            this.workInfos = workInfos;
+            notifyDataSetChanged();
+        }
+
+        @NonNull
+        @Override
+        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.layout_archive_task_item, parent, false);
+            return new ViewHolder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+            androidx.work.WorkInfo info = workInfos.get(position);
+            androidx.work.Data progress = info.getProgress();
+
+            String title = progress.getString("ARCHIVE_TITLE");
+            if (title == null) title = getString(R.string.archive_files);
+            holder.title.setText(getString(R.string.archive_files) + ": " + title);
+
+            String currentFile = progress.getString("PROGRESS_FILE");
+            if (currentFile != null) {
+                holder.currentFile.setText(currentFile);
+            } else {
+                holder.currentFile.setText(R.string.waiting);
+            }
+
+            int current = progress.getInt("PROGRESS_CURRENT", 0);
+            int total = progress.getInt("PROGRESS_TOTAL", 0);
+            if (total > 0) {
+                holder.progressBar.setIndeterminate(false);
+                holder.progressBar.setMax(total);
+                holder.progressBar.setProgress(current);
+                holder.progressText.setText(current + " / " + total);
+            } else {
+                holder.progressBar.setIndeterminate(true);
+                holder.progressText.setText("");
+            }
+
+            holder.btnCancel.setOnClickListener(v -> {
+                String taskTitle = info.getProgress().getString("ARCHIVE_TITLE");
+                if (taskTitle == null) taskTitle = "";
+                final String finalTitle = taskTitle;
+                new AlertDialog.Builder(context)
+                        .setTitle(R.string.archive_cancel_task_desc)
+                        .setMessage(getString(R.string.archive_cancel_confirmation, finalTitle))
+                        .setPositiveButton(R.string.ok, (dialog1, which) -> {
+                            androidx.work.WorkManager.getInstance(context).cancelWorkById(info.getId());
+                            Toast.makeText(context, getString(R.string.worker_archive_cancelled, finalTitle), Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton(R.string.cancel, null)
+                        .show();
+            });
+        }
+
+        @Override
+        public int getItemCount() {
+            return workInfos.size();
+        }
+
+        class ViewHolder extends RecyclerView.ViewHolder {
+            android.widget.TextView title;
+            android.widget.TextView currentFile;
+            android.widget.ProgressBar progressBar;
+            android.widget.TextView progressText;
+            android.widget.ImageButton btnCancel;
+
+            ViewHolder(View itemView) {
+                super(itemView);
+                title = itemView.findViewById(R.id.task_title);
+                currentFile = itemView.findViewById(R.id.current_file);
+                progressBar = itemView.findViewById(R.id.task_progress);
+                progressText = itemView.findViewById(R.id.progress_text);
+                btnCancel = itemView.findViewById(R.id.btn_cancel_task);
+            }
+        }
     }
 
     private void onCreateNewDirectory() {

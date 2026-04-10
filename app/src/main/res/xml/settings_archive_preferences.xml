@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/archive_settings">
+
+        <ListPreference
+            android:defaultValue="FILENAME"
+            android:entries="@array/archive_duplicate_detection_entries"
+            android:entryValues="@array/archive_duplicate_detection_values"
+            android:key="@string/pref_key_archive_duplicate_detection"
+            android:summary="%s"
+            android:title="@string/archive_duplicate_detection" />
+
+        <ListPreference
+            android:defaultValue="SKIP"
+            android:entries="@array/archive_duplicate_action_entries"
+            android:entryValues="@array/archive_duplicate_action_values"
+            android:key="@string/pref_key_archive_duplicate_action"
+            android:summary="%s"
+            android:title="@string/archive_duplicate_action" />
+
+        <ListPreference
+            android:defaultValue="DELETE"
+            android:entries="@array/archive_source_action_entries"
+            android:entryValues="@array/archive_source_action_values"
+            android:key="@string/pref_key_archive_source_action"
+            android:summary="%s"
+            android:title="@string/archive_source_action" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:key="archive_remotes_category"
+        android:title="@string/archive_root_directory" />
+
+</PreferenceScreen>

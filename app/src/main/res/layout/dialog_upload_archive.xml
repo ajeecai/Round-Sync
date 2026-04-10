@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/upload_archive_dialog_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/archive_on_upload_prompt"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp" />
+
+    <RadioGroup
+        android:id="@+id/upload_action_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/radio_standard_upload"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/upload_standard"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radio_archive"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/upload_archive"
+            android:paddingStart="4dp"
+            android:paddingLeft="4dp" />
+
+        <LinearLayout
+            android:id="@+id/archive_options_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="32dp"
+            android:paddingLeft="32dp"
+            android:visibility="gone">
+
+            <RadioGroup
+                android:id="@+id/upload_granularity_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <RadioButton
+                    android:id="@+id/radio_upload_year"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/archive_by_year"
+                    android:checked="true" />
+
+                <RadioButton
+                    android:id="@+id/radio_upload_month"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/archive_by_month" />
+
+            </RadioGroup>
+        </LinearLayout>
+
+    </RadioGroup>
+
+</LinearLayout>

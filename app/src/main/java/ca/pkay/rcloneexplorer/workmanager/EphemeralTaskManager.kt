@@ -89,21 +89,20 @@ class EphemeralTaskManager(private var mContext: Context) {
             EphemeralTaskManager(context).work(data.build(), "")
         }
 
-        private fun addFileItemToData(key: String, fileItem: FileItem, data: Data.Builder){
+        internal fun addFileItemToData(key: String, fileItem: FileItem, data: Data.Builder){
             val parcel = Parcel.obtain()
             fileItem.writeToParcel(parcel, 0)
             data.putByteArray(key, parcel.marshall())
         }
 
-        private fun addRemoteItemToData(key: String, remote: RemoteItem, data: Data.Builder){
+        internal fun addRemoteItemToData(key: String, remote: RemoteItem, data: Data.Builder){
             val parcel = Parcel.obtain()
             remote.writeToParcel(parcel, 0)
             data.putByteArray(key, parcel.marshall())
         }
     }
 
-
-    protected fun work(inputData: Data, tag: String) {
+    fun work(inputData: Data, tag: String) {
         val uploadWorkRequest = OneTimeWorkRequestBuilder<EphemeralWorker>()
         uploadWorkRequest.setInputData(inputData)
         uploadWorkRequest.addTag(tag)

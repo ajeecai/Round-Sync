@@ -1389,6 +1389,118 @@ public class Rclone {
         return stats;
     }
 
+    public List<FileItem> listFilesRecursive(RemoteItem remote, String path) {
+        FLog.i(TAG, "listFilesRecursive: called with remote=%s, path=%s", remote.getName(), path);
+        try {
+            String remotePath = path.equals("//" + remote.getName()) ? "" : path;
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("fs", remote.getName() + ":");
+            requestBody.put("remote", remotePath);
+            requestBody.put("opt", new JSONObject().put("recurse", true));
+
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url("http://" + RcloneServerManager.LOCALHOST + ":" + RcloneServerManager.RC_API_PORT + "/operations/list")
+                    .post(RequestBody.create(
+                            MediaType.parse("application/json"),
+                            requestBody.toString()))
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful() || response.body() == null) {
+                    return null;
+                }
+                String responseBody = response.body().string();
+                JSONObject jsonResponse = new JSONObject(responseBody);
+                JSONArray list = jsonResponse.getJSONArray("list");
+                List<FileItem> fileItems = new ArrayList<>();
+                for (int i = 0; i < list.length(); i++) {
+                    JSONObject item = list.getJSONObject(i);
+                    String itemPath = item.getString("Path");
+                    String itemName = item.getString("Name");
+                    long itemSize = item.getLong("Size");
+                    String itemModTime = item.getString("ModTime");
+                    String itemMimeType = item.optString("MimeType", "");
+                    boolean itemIsDir = item.getBoolean("IsDir");
+                    fileItems.add(new FileItem(remote, itemPath, itemName, itemSize, itemModTime, itemMimeType, itemIsDir, false));
+                }
+                return fileItems;
+            }
+        } catch (Exception e) {
+            FLog.e(TAG, "listFilesRecursive: error", e);
+            return null;
+        }
+    }
+
+    public InputStream catPartial(RemoteItem remote, String filePath, long count) throws IOException {
+        String remoteName = remote.getName();
+        String localRemotePath = (remote.isRemoteType(RemoteItem.LOCAL) && (!remote.isAlias() && !remote.isCrypt() && !remote.isCache()))
+                ? getLocalRemotePathPrefix(remote, context) + "/" : "";
+        String fullPath = remoteName + ":" + localRemotePath + filePath;
+        String[] command = createCommandWithOptions("cat", fullPath, "--count", String.valueOf(count));
+        String[] env = getRcloneEnv();
+        final Process process = getRuntimeProcess(command, env);
+        return process.getInputStream();
+    }
+
+    public Process copyTo(RemoteItem remote, String srcPath, String destPath) {
+        String remoteName = remote.getName();
+        String localRemotePath = (remote.isRemoteType(RemoteItem.LOCAL) && (!remote.isAlias() && !remote.isCrypt() && !remote.isCache()))
+                ? getLocalRemotePathPrefix(remote, context) + "/" : "";
+        String fullSrcPath = remoteName + ":" + localRemotePath + srcPath;
+        String fullDestPath = remoteName + ":" + localRemotePath + destPath;
+        String[] command = createCommandWithOptions("copyto", fullSrcPath, fullDestPath);
+        String[] env = getRcloneEnv();
+        try {
+            return getRuntimeProcess(command, env);
+        } catch (IOException e) {
+            FLog.e(TAG, "copyTo: error starting rclone", e);
+            return null;
+        }
+    }
+
+    public boolean fileExists(RemoteItem remote, String path) {
+        String remoteName = remote.getName();
+        String localRemotePath = (remote.isRemoteType(RemoteItem.LOCAL) && (!remote.isAlias() && !remote.isCrypt() && !remote.isCache()))
+                ? getLocalRemotePathPrefix(remote, context) + "/" : "";
+        String fullPath = remoteName + ":" + localRemotePath + path;
+        String[] command = createCommandWithOptions("lsjson", fullPath);
+        String[] env = getRcloneEnv();
+        try {
+            Process process = getRuntimeProcess(command, env);
+            process.waitFor();
+            if (process.exitValue() != 0) {
+                return false;
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String output = reader.readLine();
+                return output != null && !output.equals("[]");
+            }
+        } catch (IOException | InterruptedException e) {
+            return false;
+        }
+    }
+
+    public boolean removeEmptyDir(RemoteItem remote, String path) {
+        String remoteName = remote.getName();
+        String localRemotePath = (remote.isRemoteType(RemoteItem.LOCAL) && (!remote.isAlias() && !remote.isCrypt() && !remote.isCache()))
+                ? getLocalRemotePathPrefix(remote, context) + "/" : "";
+        String fullPath = remoteName + ":" + localRemotePath + path;
+        String[] command = createCommandWithOptions("rmdirs", fullPath);
+        String[] env = getRcloneEnv();
+        try {
+            Process process = getRuntimeProcess(command, env);
+            process.waitFor();
+            return process.exitValue() == 0;
+        } catch (IOException | InterruptedException e) {
+            return false;
+        }
+    }
+
     public class AboutResult {
         private final long used;
         private final long total;

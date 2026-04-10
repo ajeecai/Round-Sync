@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Parcel
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
@@ -19,13 +20,19 @@ import ca.pkay.rcloneexplorer.Items.FileItem
 import ca.pkay.rcloneexplorer.Items.RemoteItem
 import ca.pkay.rcloneexplorer.R
 import ca.pkay.rcloneexplorer.Rclone
+import ca.pkay.rcloneexplorer.archive.ArchiveConfig
+import ca.pkay.rcloneexplorer.archive.ArchiveTaskRunner
 import ca.pkay.rcloneexplorer.notifications.prototypes.WorkerNotification
 import ca.pkay.rcloneexplorer.notifications.support.StatusObject
 import ca.pkay.rcloneexplorer.util.FLog
 import ca.pkay.rcloneexplorer.util.SyncLog
 import ca.pkay.rcloneexplorer.util.WifiConnectivitiyUtil
 import de.felixnuesse.extract.extensions.tag
+import de.felixnuesse.extract.notifications.implementations.ArchiveWorkerNotification
+import de.felixnuesse.extract.notifications.implementations.DeleteWorkerNotification
 import de.felixnuesse.extract.notifications.implementations.DownloadWorkerNotification
+import de.felixnuesse.extract.notifications.implementations.MoveWorkerNotification
+import de.felixnuesse.extract.notifications.implementations.UploadWorkerNotification
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -33,13 +40,8 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.io.InterruptedIOException
 import kotlin.random.Random
-import android.util.Log
-import de.felixnuesse.extract.notifications.implementations.DeleteWorkerNotification
-import de.felixnuesse.extract.notifications.implementations.MoveWorkerNotification
-import de.felixnuesse.extract.notifications.implementations.UploadWorkerNotification
 
-
-class EphemeralWorker (private var mContext: Context, workerParams: WorkerParameters): Worker(mContext, workerParams) {
+class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParameters): Worker(mContext, workerParams) {
 
 
     companion object {
@@ -56,14 +58,15 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
         const val MOVE_TARGETPATH = "MOVE_TARGETPATH"
 
         const val DELETE_FILE = "DELETE_FILE"
+        const val EXTRA_FILE = "EXTRA_FILE"
     }
 
     internal enum class FAILURE_REASON {
-        NO_FAILURE, NO_UNMETERED, NO_CONNECTION, RCLONE_ERROR, CONNECTIVITY_CHANGED, CANCELLED, NO_TASK
+        NO_FAILURE, NO_UNMETERED, NO_CONNECTION, RCLONE_ERROR, CONNECTIVITY_CHANGED, CANCELLED, NO_TASK, TOO_MANY_FILES
     }
 
     // Objects
-    private var mNotificationManager: WorkerNotification? = null
+    internal var mNotificationManager: WorkerNotification? = null
     private val mPreferences = PreferenceManager.getDefaultSharedPreferences(mContext)
 
     // States
@@ -71,14 +74,18 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
     private var sConnectivityChanged = false
 
     private var sRcloneProcess: Process? = null
-    private val statusObject = StatusObject(mContext)
-    private var failureReason = FAILURE_REASON.NO_FAILURE
+    internal val statusObject = StatusObject(mContext)
+    internal var failureReason = FAILURE_REASON.NO_FAILURE
     private var endNotificationAlreadyPosted = false
     private var silentRun = false
-    private val ongoingNotificationID = Random.nextInt()
+    internal val ongoingNotificationID = Random.nextInt()
 
 
-    private var mTitle: String = mNotificationManager?.initialTitle ?: ""
+    internal val mTitle: String by lazy {
+        inputData.getString("ARCHIVE_TITLE") ?: mNotificationManager?.initialTitle ?: ""
+    }
+
+    internal val inputData = workerParams.inputData
 
     override fun doWork(): Result {
 
@@ -160,6 +167,9 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
                             fileItem
                         )
                     }
+                    Type.REMOTE_ARCHIVE, Type.UPLOAD_ARCHIVE -> {
+                        return ArchiveTaskRunner(this).run(type, remoteItem)
+                    }
                 }
                 handleSync(mTitle)
             } else {
@@ -190,12 +200,13 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
         postSync()
     }
 
-    fun prepareNotificationManager(type: Type): WorkerNotification {
+    fun prepareNotificationManager(type: Type): WorkerNotification? {
         return when(type){
             Type.DOWNLOAD -> DownloadWorkerNotification(mContext)
             Type.UPLOAD -> UploadWorkerNotification(mContext)
             Type.DELETE -> DeleteWorkerNotification(mContext)
             Type.MOVE -> MoveWorkerNotification(mContext)
+            Type.REMOTE_ARCHIVE, Type.UPLOAD_ARCHIVE -> ArchiveWorkerNotification(mContext)
         }
     }
 
@@ -228,7 +239,6 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
                         ))
                     } catch (e: JSONException) {
                         Log.e(tag(), "Error: the offending line: $line")
-                        //FLog.e(TAG, "onHandleIntent: error reading json", e)
                     }
                 }
             } catch (e: InterruptedIOException) {
@@ -280,6 +290,9 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
             FAILURE_REASON.NO_CONNECTION -> {
                 content = mContext.getString(R.string.operation_failed_no_connection, mTitle)
             }
+            FAILURE_REASON.TOO_MANY_FILES -> {
+                content = mContext.getString(R.string.archive_too_many_files, ArchiveConfig.MAX_ARCHIVE_FILES)
+            }
             FAILURE_REASON.RCLONE_ERROR -> {
                 content = mContext.getString(R.string.operation_failed_unknown_rclone_error, mTitle)
             }
@@ -301,10 +314,6 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
     }
 
     private fun showSuccessNotification(notificationId: Int) {
-        //Todo: Show sync-errors in notification. Also see line 169
-        //Todo: This should be context dependend on the type. It is currently not!
-
-
         var message = mNotificationManager?.generateSuccessMessage(statusObject, getCurrentFile())?: "error"
 
         mNotificationManager?.showSuccessNotification(
@@ -321,9 +330,16 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
         //SyncLog.info(mContext, mContext.getString(R.string.operation_success, mTitle), message)
     }
 
+    internal fun updateNotificationInternal(notification: Notification?) {
+        updateForegroundNotification(notification)
+    }
+
+    internal fun setProgressInternal(data: androidx.work.Data) {
+        setProgressAsync(data)
+    }
+
     private fun showFailNotification(notificationId: Int, content: String, wasCancelled: Boolean = false) {
         var text = content
-        //Todo: check if we should also add errors on success
         statusObject.printErrors()
         val errors = statusObject.getAllErrorMessages()
         if (errors.isNotEmpty()) {
@@ -440,7 +456,11 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
     }
 
     private fun getCurrentFile(): FileItem {
-        return when(Type.valueOf(inputData.getString(EPHEMERAL_TYPE)?:Type.DOWNLOAD.name)){
+        if (inputData.keyValueMap.containsKey(EXTRA_FILE)) {
+            return getFileitemFromParcel(EXTRA_FILE)
+        }
+        val type = Type.valueOf(inputData.getString(EPHEMERAL_TYPE)?:Type.DOWNLOAD.name)
+        return when(type){
             Type.DOWNLOAD -> {
                 getFileitemFromParcel(DOWNLOAD_SOURCE)
             }
@@ -464,6 +484,9 @@ class EphemeralWorker (private var mContext: Context, workerParams: WorkerParame
             }
             Type.DELETE -> {
                 getFileitemFromParcel(DELETE_FILE)
+            }
+            Type.REMOTE_ARCHIVE, Type.UPLOAD_ARCHIVE -> {
+                ArchiveTaskRunner.getArchiveFileItem(type, inputData)
             }
         }
     }

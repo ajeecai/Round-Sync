@@ -178,4 +178,12 @@ public class FileItem implements Parcelable {
         dest.writeByte((byte) (isDir ? 1 : 0));
         dest.writeByte((byte) (startAtRoot ? 1 : 0));
     }
+
+    public FileItem withPath(String newPath) {
+        FileItem newItem = new FileItem(remote, newPath, name, size, "", mimeType, isDir, startAtRoot);
+        newItem.modTime = this.modTime;
+        newItem.humanReadableModTime = this.humanReadableModTime;
+        newItem.formattedModTime = this.formattedModTime;
+        return newItem;
+    }
 }

@@ -377,7 +377,7 @@
     <string name="pref_bugreport_start_summary">点击按钮开始数据收集，然后尝试重新创建问题。完成后停止数据收集。</string>
     <string name="pref_send_sigquit_title">调试：使用 SIGQUIT 停止</string>
     <string name="pref_send_sigquit_summary">使用 kill-SIGQUIT 停止所有 Rclone 进程。需要启用日志记录。</string>
-    <string name="sync_notification_transferred">已转移 %s 共 %s</string>
+    <string name="sync_notification_transferred">已转移 %1$s 共 %2$s</string>
     <string name="sync_notification_speed">速度: %s</string>
     <string name="sync_notification_remaining">剩余: %s</string>
     <string name="sync_notification_errors">错误: %d</string>
@@ -402,7 +402,7 @@
         <item quantity="other">%s 秒</item>
     </plurals>
 
-    <string name="sync_notification_short">%s 共 %s ，剩余 %s</string>
+    <string name="sync_notification_short">%1$s 共 %2$s ，剩余 %3$s</string>
     <string name="abi_not_supported_arm_downgrade">不幸的是，此 Round Sync 版本与您的设备不兼容。试试 armeabi-v7a 的 APK， 从 github.com/newhinton/Round-Sync/releases/latest 下载。</string>
     <string name="abi_not_supported">您的设备不支持此版本的 Round Sync。</string>
     <string name="trigger">触发器</string>
@@ -558,4 +558,49 @@
     <string name="worker_move_success">移动成功</string>
     <string name="worker_download_initialtitle">下载中…</string>
     <string name="worker_upload_initialtitle">上传中…</string>
+
+    <string name="archive_files">归档文件</string>
+    <string name="archive_by_year">按年 (例如 2022)</string>
+    <string name="archive_by_month">按月 (例如 2022-10)</string>
+    <string name="archive_root_label">归档至: %s</string>
+    <string name="archive_settings">文件归档</string>
+    <string name="archive_settings_description">配置归档目录和重复文件处理方式</string>
+    <string name="archive_root_directory">归档根目录</string>
+    <string name="archive_root_summary">远端相对路径。留空表示根目录</string>
+    <string name="archive_duplicate_detection">重复检测</string>
+    <string name="archive_duplicate_action">发现重复时</string>
+    <string name="archive_source_action">归档后的源文件</string>
+    <string name="archive_progress">正在归档 %1$d/%2$d: %3$s</string>
+    <string name="archive_on_upload">按日期归档上传的文件</string>
+    <string name="archive_on_upload_prompt">是否按日期归档上传的文件？</string>
+    <string name="worker_archive_initialtitle">归档中…</string>
+    <string name="worker_archive_success">归档完成</string>
+    <string name="worker_archive_failed">归档失败</string>
+    <string name="worker_archive_cancelled">%1$s 归档已被取消</string>
+    <string name="archive_unknown_date_folder">未知</string>
+    <string name="archive_edit_root_title">编辑 %s 的归档根目录</string>
+    <string name="upload_standard">普通上传</string>
+    <string name="upload_archive">归档上传</string>
+    <string name="archive_keep_running">后台运行</string>
+    <string name="archive_cancel_task_desc">取消此任务</string>
+    <string name="archive_cancel_confirmation">确定要取消 %1$s 的归档任务吗？</string>
+    <string name="no_tasks">暂无活动的归档任务</string>
+    <string name="waiting">等待中…</string>
+    <string name="archive_too_many_files">归档取消：文件数量超过 %1$d 个上限，以防内存溢出。</string>
+
+    <string-array name="archive_duplicate_detection_entries">
+        <item>按文件名</item>
+        <item>按 MD5 哈希</item>
+    </string-array>
+
+    <string-array name="archive_duplicate_action_entries">
+        <item>跳过</item>
+        <item>覆盖</item>
+        <item>重命名 (添加后缀)</item>
+    </string-array>
+
+    <string-array name="archive_source_action_entries">
+        <item>删除源文件</item>
+        <item>保留源文件</item>
+    </string-array>
 </resources>

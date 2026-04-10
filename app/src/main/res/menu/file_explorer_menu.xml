@@ -47,4 +47,9 @@
         android:title="@string/sync"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_archive"
+        android:title="@string/archive"
+        app:showAsAction="never" />
+
 </menu>

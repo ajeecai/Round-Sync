@@ -17,15 +17,18 @@ import ca.pkay.rcloneexplorer.R;
 
 public class SettingsFragment extends Fragment {
 
-    public final static int GENERAL_SETTINGS = 1;
-    public final static int FILE_ACCESS_SETTINGS = 2;
-    public final static int LOOK_AND_FEEL_SETTINGS = 3;
-    public final static int LOGGING_SETTINGS = 4;
-    public final static int NOTIFICATION_SETTINGS = 5;
+    public enum Category {
+        GENERAL,
+        FILE_ACCESS,
+        LOOK_AND_FEEL,
+        LOGGING,
+        NOTIFICATION,
+        ARCHIVE
+    }
     private OnSettingCategorySelectedListener clickListener;
 
     public interface OnSettingCategorySelectedListener {
-        void onSettingCategoryClicked(int category);
+        void onSettingCategoryClicked(Category category);
     }
 
     /**
@@ -69,17 +72,17 @@ public class SettingsFragment extends Fragment {
 
     private void setClickListeners(View view) {
 
-        view.findViewById(R.id.general_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(GENERAL_SETTINGS));
+        view.findViewById(R.id.general_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.GENERAL));
 
-        view.findViewById(R.id.logging_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(LOGGING_SETTINGS));
+        view.findViewById(R.id.logging_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.LOGGING));
 
-        view.findViewById(R.id.logging_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(LOGGING_SETTINGS));
+        view.findViewById(R.id.look_and_feel_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.LOOK_AND_FEEL));
 
-        view.findViewById(R.id.look_and_feel_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(LOOK_AND_FEEL_SETTINGS));
+        view.findViewById(R.id.notification_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.NOTIFICATION));
 
-        view.findViewById(R.id.notification_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(NOTIFICATION_SETTINGS));
+        view.findViewById(R.id.file_access_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.FILE_ACCESS));
 
-        view.findViewById(R.id.file_access_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(FILE_ACCESS_SETTINGS));
+        view.findViewById(R.id.archive_settings).setOnClickListener(v -> clickListener.onSettingCategoryClicked(Category.ARCHIVE));
 
         view.findViewById(R.id.importSettings).setOnClickListener(v -> startActivity(getImportIntent()));
         view.findViewById(R.id.exportSettings).setOnClickListener(v -> startActivity(getExportIntent()));

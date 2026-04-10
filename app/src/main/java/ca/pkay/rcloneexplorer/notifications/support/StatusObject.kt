@@ -16,6 +16,8 @@ class StatusObject(var mContext: Context){
     var mErrorList = ArrayList<ErrorObject>()
     var mStats = JSONObject()
     var mLogline = JSONObject()
+    var manualSuccessCount = 0
+    var manualSkippedCount = 0
 
     var estimatedAverageSpeed = 0L
     var lastItemAverageSpeed = 0L

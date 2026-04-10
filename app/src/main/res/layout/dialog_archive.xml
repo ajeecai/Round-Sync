@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/archive_dialog_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/archive_files"
+        android:textSize="16sp"
+        android:layout_marginBottom="16dp" />
+
+    <RadioGroup
+        android:id="@+id/archive_granularity_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <RadioButton
+            android:id="@+id/radio_year"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/archive_by_year"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/radio_month"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/archive_by_month" />
+
+    </RadioGroup>
+
+</LinearLayout>
