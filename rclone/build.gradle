@@ -140,6 +140,8 @@ def buildRclone(abi) {
     ]
 
     return {
+        inputs.property('rcloneVersion', RCLONE_VERSION)
+        outputs.file getOutputPath(abi)
         doLast {
             exec {
                 environment 'GOPATH', GOPATH
@@ -151,7 +153,8 @@ def buildRclone(abi) {
                 environment 'CGO_LDFLAGS', '-fuse-ld=lld -Wl,--hash-style=both -s'
                 abiToEnv[abi].each {entry -> environment entry.key, entry.value}
                 workingDir CACHE_PATH
-                def ldflags = "-buildid= -X github.com/rclone/rclone/fs.Version=${RCLONE_VERSION}${RCLONE_CUSTOM_VERSION_SUFFIX}"
+                // Strip symbols to reduce library size and embed version
+                def ldflags = "-s -w -buildid= -X github.com/rclone/rclone/fs.Version=${RCLONE_VERSION}${RCLONE_CUSTOM_VERSION_SUFFIX}"
                 commandLine (
                     'go',
                     'build',
@@ -180,8 +183,18 @@ task createRcloneModule(type: Exec) {
 }
 
 task checkoutRclone(type: Exec, dependsOn: createRcloneModule) {
+    // Speed-up: skip checkout if the requested module@version already exists in the local GOPATH cache
+    onlyIf {
+        def cachedModule = Paths.get(GOPATH, 'pkg', 'mod', "${RCLONE_MODULE}@v${RCLONE_VERSION}").toFile()
+        return !cachedModule.exists()
+    }
     workingDir CACHE_PATH
     environment 'GOPATH', GOPATH
+    // Respect a pre-configured GOPROXY from the environment (optional speed-up behind firewalls/CDNs)
+    def goProxy = System.getenv('GOPROXY')
+    if (goProxy != null && goProxy.trim().length() > 0) {
+        environment 'GOPROXY', goProxy
+    }
 
     def goVersionOutput = new ByteArrayOutputStream()
     exec{
