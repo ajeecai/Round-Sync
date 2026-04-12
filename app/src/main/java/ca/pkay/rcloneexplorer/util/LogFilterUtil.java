@@ -22,6 +22,8 @@ public class LogFilterUtil {
                line.contains("FileExplorerRecyclerViewAdapter") ||
                line.contains("FileExplorerRVA") ||
                line.contains("FileExplorerFragment") ||
+               line.contains("ArchiveTaskRunner") ||
+               line.contains("EphemeralWorker") ||
                line.contains("StreamTask") ||
                line.contains("RcloneServerManager") ||
                line.contains("MediaViewerActivity") ||

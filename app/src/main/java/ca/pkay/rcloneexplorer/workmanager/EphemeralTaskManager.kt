@@ -58,7 +58,8 @@ class EphemeralTaskManager(private var mContext: Context) {
             remote: RemoteItem,
             currentPath: String,
             file: FileItem,
-            readablePath: String
+            readablePath: String,
+            sourcePath: String = ""
         ) {
 
             MoveWorkerNotification(context).generateChannels()
@@ -69,6 +70,7 @@ class EphemeralTaskManager(private var mContext: Context) {
 
             addFileItemToData(EphemeralWorker.MOVE_FILE, file, data)
             data.putString(EphemeralWorker.MOVE_TARGETPATH, currentPath)
+            data.putString(EphemeralWorker.BROADCAST_PATH, sourcePath)
             EphemeralTaskManager(context).work(data.build(), "")
         }
 
@@ -86,6 +88,7 @@ class EphemeralTaskManager(private var mContext: Context) {
             addRemoteItemToData(EphemeralWorker.REMOTE, remote, data)
 
             addFileItemToData(EphemeralWorker.DELETE_FILE, file, data)
+            data.putString(EphemeralWorker.BROADCAST_PATH, currentPath)
             EphemeralTaskManager(context).work(data.build(), "")
         }
 

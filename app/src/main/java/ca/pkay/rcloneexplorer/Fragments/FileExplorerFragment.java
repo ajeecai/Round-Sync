@@ -53,6 +53,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.google.android.material.snackbar.Snackbar;
+
 import com.leinardi.android.speeddial.SpeedDialActionItem;
 import com.leinardi.android.speeddial.SpeedDialOverlayLayout;
 import com.leinardi.android.speeddial.SpeedDialView;
@@ -101,6 +103,7 @@ import ca.pkay.rcloneexplorer.util.LargeParcel;
 import ca.pkay.rcloneexplorer.util.VideoPrefetchManager;
 import ca.pkay.rcloneexplorer.archive.ArchiveConfig;
 import ca.pkay.rcloneexplorer.workmanager.EphemeralTaskManager;
+import ca.pkay.rcloneexplorer.workmanager.EphemeralWorker;
 import ca.pkay.rcloneexplorer.archive.ArchiveTaskLauncher;
 import ca.pkay.rcloneexplorer.workmanager.SyncManager;
 import de.felixnuesse.ui.BreadcrumbView;
@@ -151,6 +154,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
     private List<FileItem> moveList;
     private MenuItem archiveStatusMenuItem;
     private String moveStartPath;
+    private Snackbar actionSnackbar;
     private List<FileItem> downloadList;
     private FileItem renameItem;
     private BreadcrumbView breadcrumbView;
@@ -642,37 +646,35 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             String broadcastPath = intent.getStringExtra(getString(R.string.background_service_broadcast_data_path));
             String broadcastPath2 = intent.getStringExtra(getString(R.string.background_service_broadcast_data_path2));
             String path = directoryObject.getCurrentPath();
+            FLog.d(TAG, "broadcast received: broadcastRemote='" + broadcastRemote + "' broadcastPath='" + broadcastPath + "'");
+            FLog.d(TAG, "broadcast check:   remoteName='" + remoteName + "' currentPath='" + path + "'");
             if (!remoteName.equals(broadcastRemote)) {
+                FLog.d(TAG, "broadcast IGNORED: remote mismatch");
                 return;
             }
 
-            if (path.equals(broadcastPath)) {
-                if (fetchDirectoryTask != null) {
-                    fetchDirectoryTask.cancel(true);
-                }
-                if (directoryObject.isPathInCache(broadcastPath)) {
-                    directoryObject.removePathFromCache(broadcastPath);
-                }
-                fetchDirectoryTask = new FetchDirectoryContent(true).execute();
-            } else if (directoryObject.isPathInCache(broadcastPath)) {
+            String broadcastType = intent.getStringExtra(EphemeralWorker.BROADCAST_TYPE);
+            if (EphemeralWorker.BROADCAST_TYPE_FINISHED.equals(broadcastType)) {
+                // Action complete: dismiss snackbar, invalidate only changed paths, refresh current dir
+                dismissActionSnackbar();
                 directoryObject.removePathFromCache(broadcastPath);
-            }
-
-            if (broadcastPath2 == null) {
-                return;
-            }
-
-            if (path.equals(broadcastPath2)) {
+                if (broadcastPath2 != null) directoryObject.removePathFromCache(broadcastPath2);
                 if (fetchDirectoryTask != null) {
                     fetchDirectoryTask.cancel(true);
                 }
-                swipeRefreshLayout.setRefreshing(false);
-                if (directoryObject.isPathInCache(broadcastPath2)) {
-                    directoryObject.removePathFromCache(broadcastPath2);
-                }
                 fetchDirectoryTask = new FetchDirectoryContent(true).execute();
-            } else if (directoryObject.isPathInCache(broadcastPath2)) {
-                directoryObject.removePathFromCache(broadcastPath2);
+            } else if (EphemeralWorker.BROADCAST_TYPE_PROGRESS.equals(broadcastType)) {
+                // Progress update: only refresh if user is currently in the affected directory
+                directoryObject.removePathFromCache(broadcastPath);
+                if (path.equals(broadcastPath)) {
+                    FLog.d(TAG, "progress broadcast: path match, refreshing UI");
+                    if (fetchDirectoryTask != null) {
+                        fetchDirectoryTask.cancel(true);
+                    }
+                    fetchDirectoryTask = new FetchDirectoryContent(true).execute();
+                } else {
+                    FLog.d(TAG, "progress broadcast: path mismatch, cache invalidated only. currentPath='" + path + "' broadcastPath='" + broadcastPath + "'");
+                }
             }
         }
     };
@@ -716,7 +718,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                             int checkedGranularityId = granularityGroup.getCheckedRadioButtonId();
                             ArchiveConfig.Granularity granularity = (checkedGranularityId == R.id.radio_upload_year) 
                                     ? ArchiveConfig.Granularity.YEAR : ArchiveConfig.Granularity.MONTH;
-                            ArchiveTaskLauncher.queueUploadArchive(context, remote, uploadList, granularity);
+                            ArchiveTaskLauncher.queueUploadArchive(context, remote, uploadList, granularity, currentPath);
                         }
                     })
                     .setNegativeButton(R.string.cancel, null)
@@ -1221,9 +1223,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
             path2 = "//" + remoteName;
         }
         for (FileItem moveItem : moveList) {
-            EphemeralTaskManager.Companion.queueMove(this.context, remote, directoryObject.getCurrentPath(), moveItem, moveItem.getName());
+            EphemeralTaskManager.Companion.queueMove(this.context, remote, directoryObject.getCurrentPath(), moveItem, moveItem.getName(), moveStartPath != null ? moveStartPath : "");
         }
-        Toasty.info(context, getString(R.string.moving_info), Toast.LENGTH_SHORT, true).show();
+        showActionSnackbar(getString(R.string.moving_info));
         moveList.clear();
         moveStartPath = null;
     }
@@ -1844,6 +1846,29 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
         moveBar.setVisibility(View.GONE);
     }
 
+    private void showActionSnackbar(String message) {
+        if (actionSnackbar != null) actionSnackbar.dismiss();
+        actionSnackbar = Snackbar.make(swipeRefreshLayout, "", Snackbar.LENGTH_INDEFINITE);
+
+        Snackbar.SnackbarLayout layout = (Snackbar.SnackbarLayout) actionSnackbar.getView();
+        layout.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        layout.setPadding(0, 0, 0, 0);
+        layout.findViewById(com.google.android.material.R.id.snackbar_text).setVisibility(View.GONE);
+
+        View customView = LayoutInflater.from(context).inflate(R.layout.snackbar_action, layout, false);
+        ((android.widget.TextView) customView.findViewById(R.id.snackbar_message)).setText(message);
+        layout.addView(customView, 0);
+
+        actionSnackbar.show();
+    }
+
+    private void dismissActionSnackbar() {
+        if (actionSnackbar != null) {
+            actionSnackbar.dismiss();
+            actionSnackbar = null;
+        }
+    }
+
     private void deleteFiles(final List<FileItem> deleteList) {
         String title = getResources().getQuantityString(R.plurals.delete_x_items, deleteList.size(), deleteList.size());
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -1852,10 +1877,11 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 .setNegativeButton(getResources().getString(R.string.cancel), null)
                 .setPositiveButton(getResources().getString(R.string.delete), (dialog, which) -> {
                     recyclerViewAdapter.cancelSelection();
+                    String currentPath = directoryObject.getCurrentPath();
                     for (FileItem deleteItem : deleteList) {
-                        EphemeralTaskManager.Companion.queueDelete(this.context, remote, deleteItem, directoryObject.getCurrentPath());
+                        EphemeralTaskManager.Companion.queueDelete(this.context, remote, deleteItem, currentPath);
                     }
-                    Toasty.info(context, getString(R.string.deleting_info), Toast.LENGTH_SHORT, true).show();
+                    showActionSnackbar(getString(R.string.deleting_info));
                 });
         if(deleteList.size() == 1) {
             builder.setMessage(getString(R.string.name_will_be_deleted, deleteList.get(0).getName()));
@@ -1917,8 +1943,9 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                 .setPositiveButton(R.string.ok, (dialog, which) -> {
                     int checkedId = granularityGroup.getCheckedRadioButtonId();
                     ArchiveConfig.Granularity granularity = (checkedId == R.id.radio_year) ? ArchiveConfig.Granularity.YEAR : ArchiveConfig.Granularity.MONTH;
-                    ArchiveTaskLauncher.queueArchive(context, remote, items, granularity);
+                    ArchiveTaskLauncher.queueRemoteArchive(context, remote, items, granularity, directoryObject.getCurrentPath());
                     recyclerViewAdapter.cancelSelection();
+                    showActionSnackbar(getString(R.string.worker_archive_initialtitle));
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
@@ -1932,7 +1959,7 @@ public class FileExplorerFragment extends Fragment implements   FileExplorerRecy
                     boolean isRunning = false;
                     if (workInfos != null) {
                         for (androidx.work.WorkInfo info : workInfos) {
-                            if (info.getState() == androidx.work.WorkInfo.State.RUNNING || 
+                            if (info.getState() == androidx.work.WorkInfo.State.RUNNING ||
                                 info.getState() == androidx.work.WorkInfo.State.ENQUEUED) {
                                 isRunning = true;
                                 break;

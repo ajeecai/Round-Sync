@@ -59,6 +59,15 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
 
         const val DELETE_FILE = "DELETE_FILE"
         const val EXTRA_FILE = "EXTRA_FILE"
+
+        // Use to broadcast the directory where the action happened:
+        // source dir for MOVE, current dir for DELETE.
+        // UPLOAD uses UPLOAD_TARGETPATH directly instead.
+        const val BROADCAST_PATH = "BROADCAST_PATH"
+
+        const val BROADCAST_TYPE = "BROADCAST_TYPE"
+        const val BROADCAST_TYPE_FINISHED = "FINISHED"
+        const val BROADCAST_TYPE_PROGRESS = "PROGRESS"
     }
 
     internal enum class FAILURE_REASON {
@@ -110,6 +119,8 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
             }
 
             mNotificationManager?.setCancelId(id)
+            var broadcastPath: String? = null
+            var broadcastPath2: String? = null
             if(preconditionsMet()) {
                 // do not instantiate rclone when you dont want it to run.
                 // It will immediately run!
@@ -138,6 +149,7 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
                             target,
                             file
                         )
+                        broadcastPath = target
                     }
                     Type.MOVE -> {
                         val target = inputData.getString(MOVE_TARGETPATH)
@@ -153,6 +165,8 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
                             fileItem,
                             target
                         )
+                        broadcastPath = inputData.getString(BROADCAST_PATH)
+                        broadcastPath2 = target
                     }
                     Type.DELETE -> {
                         val fileItem = getFileitemFromParcel(DELETE_FILE)
@@ -166,6 +180,7 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
                             remoteItem,
                             fileItem
                         )
+                        broadcastPath = inputData.getString(BROADCAST_PATH)
                     }
                     Type.REMOTE_ARCHIVE, Type.UPLOAD_ARCHIVE -> {
                         return ArchiveTaskRunner(this).run(type, remoteItem)
@@ -179,6 +194,7 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
             }
 
             postSync()
+            sendActionFinishedBroadcast(remoteItem.name, broadcastPath, broadcastPath2)
             // Indicate whether the work finished successfully with the Result
             return Result.success()
         }
@@ -378,11 +394,26 @@ class EphemeralWorker (internal var mContext: Context, workerParams: WorkerParam
         return true
     }
 
-    private fun sendUploadFinishedBroadcast(remote: String, path: String?) {
+    internal fun sendActionFinishedBroadcast(remote: String, path: String?, path2: String? = null) {
         val intent = Intent()
         intent.action = getString(R.string.background_service_broadcast)
         intent.putExtra(getString(R.string.background_service_broadcast_data_remote), remote)
         intent.putExtra(getString(R.string.background_service_broadcast_data_path), path)
+        intent.putExtra(BROADCAST_TYPE, BROADCAST_TYPE_FINISHED)
+        if (path2 != null) {
+            intent.putExtra(getString(R.string.background_service_broadcast_data_path2), path2)
+        }
+        FLog.d(tag(), "sendActionFinishedBroadcast: remote='$remote' path='$path' path2='$path2'")
+        LocalBroadcastManager.getInstance(mContext).sendBroadcast(intent)
+    }
+
+    internal fun sendProgressBroadcast(remote: String, path: String) {
+        val intent = Intent()
+        intent.action = getString(R.string.background_service_broadcast)
+        intent.putExtra(getString(R.string.background_service_broadcast_data_remote), remote)
+        intent.putExtra(getString(R.string.background_service_broadcast_data_path), path)
+        intent.putExtra(BROADCAST_TYPE, BROADCAST_TYPE_PROGRESS)
+        FLog.d(tag(), "sendProgressBroadcast: remote='$remote' path='$path'")
         LocalBroadcastManager.getInstance(mContext).sendBroadcast(intent)
     }
 

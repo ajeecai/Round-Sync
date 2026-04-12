@@ -16,11 +16,12 @@ object ArchiveTaskLauncher {
     const val ARCHIVE_TASK_TAG = "ARCHIVE_TASK"
 
     @JvmStatic
-    fun queueArchive(
+    fun queueRemoteArchive(
         context: Context,
         remote: RemoteItem,
         items: List<FileItem>,
-        granularity: ArchiveConfig.Granularity
+        granularity: ArchiveConfig.Granularity,
+        sourcePath: String = ""
     ) {
         ArchiveWorkerNotification(context).generateChannels()
 
@@ -28,6 +29,7 @@ object ArchiveTaskLauncher {
         data.putString(EphemeralWorker.EPHEMERAL_TYPE, Type.REMOTE_ARCHIVE.name)
         EphemeralTaskManager.addRemoteItemToData(EphemeralWorker.REMOTE, remote, data)
         data.putString("ARCHIVE_GRANULARITY", granularity.name)
+        data.putString("ARCHIVE_SOURCE_PATH", sourcePath)
         
         val title = if (items.isNotEmpty()) items[0].name else "Archive collection"
         data.putString("ARCHIVE_TITLE", title)
@@ -58,7 +60,8 @@ object ArchiveTaskLauncher {
         context: Context,
         remote: RemoteItem,
         localPaths: List<String>,
-        granularity: ArchiveConfig.Granularity
+        granularity: ArchiveConfig.Granularity,
+        targetPath: String = ""
     ) {
         ArchiveWorkerNotification(context).generateChannels()
 
@@ -67,6 +70,7 @@ object ArchiveTaskLauncher {
         EphemeralTaskManager.addRemoteItemToData(EphemeralWorker.REMOTE, remote, data)
         data.putString("ARCHIVE_GRANULARITY", granularity.name)
         data.putStringArray("UPLOAD_PATHS", localPaths.toTypedArray())
+        data.putString("ARCHIVE_TARGET_PATH", targetPath)
 
         val title = if (localPaths.isNotEmpty()) File(localPaths[0]).name else "Multiple uploads"
         data.putString("ARCHIVE_TITLE", title)

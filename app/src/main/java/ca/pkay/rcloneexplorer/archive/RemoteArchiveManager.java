@@ -19,6 +19,8 @@ public class RemoteArchiveManager {
 
     public interface ArchiveProgressListener {
         void onProgress(int current, int total, String currentFile);
+        void onNewTargetDirectory(String targetDir);
+        void onFileArchived(String targetDir);
         void onComplete(int archived, int skipped, int failed);
     }
 
@@ -70,6 +72,7 @@ public class RemoteArchiveManager {
         int archived = 0;
         int skipped = 0;
         int failed = 0;
+        Set<String> newDirNotified = new HashSet<>();
 
         // Step 2: Process each file
         for (int i = 0; i < total; i++) {
@@ -97,12 +100,26 @@ public class RemoteArchiveManager {
 
                 // Compute target path
                 String targetSubDir = computeTargetSubDir(date, granularity);
+                // Normalize archiveRoot: strip leading slash to match DirectoryObject path format
+                // (DirectoryObject uses "abc/2022-12", not "/abc/2022-12")
                 String archivePath = config.archiveRoot;
+                if (archivePath.startsWith("/")) {
+                    archivePath = archivePath.substring(1);
+                }
                 if (!archivePath.isEmpty() && !archivePath.endsWith("/")) {
                     archivePath += "/";
                 }
                 String targetDir = archivePath + targetSubDir;
                 String targetPath = targetDir + "/" + file.getName();
+
+                // Create target directory explicitly before moving so it appears on remote immediately 
+                // UI can refresh and show the new dir without waiting for the file
+                if (newDirNotified.add(targetDir)) {
+                    rclone.makeDirectory(remote, targetDir);
+                    if (listener != null) {
+                        listener.onNewTargetDirectory(targetDir);
+                    }
+                }
 
                 // Handle duplicates
                 if (rclone.fileExists(remote, targetPath)) {
@@ -141,6 +158,9 @@ public class RemoteArchiveManager {
 
                 if (success) {
                     archived++;
+                    if (listener != null) {
+                        listener.onFileArchived(targetDir);
+                    }
                 } else {
                     failed++;
                 }

@@ -7,8 +7,10 @@ import ca.pkay.rcloneexplorer.Items.FileItem
 import ca.pkay.rcloneexplorer.Items.RemoteItem
 import ca.pkay.rcloneexplorer.R
 import de.felixnuesse.extract.notifications.implementations.ArchiveWorkerNotification
+import ca.pkay.rcloneexplorer.util.FLog
 import ca.pkay.rcloneexplorer.workmanager.EphemeralWorker
 import ca.pkay.rcloneexplorer.workmanager.Type
+import de.felixnuesse.extract.extensions.tag
 import java.io.File
 
 class ArchiveTaskRunner(private val worker: EphemeralWorker) {
@@ -62,6 +64,7 @@ class ArchiveTaskRunner(private val worker: EphemeralWorker) {
         }
 
         val archiveManager = RemoteArchiveManager(context, remoteItem.name)
+        val sourcePath = inputData.getString("ARCHIVE_SOURCE_PATH") ?: ""
         archiveManager.setListener(object : RemoteArchiveManager.ArchiveProgressListener {
             override fun onProgress(current: Int, total: Int, currentFile: String) {
                 val percent = (current * 100) / total
@@ -84,6 +87,21 @@ class ArchiveTaskRunner(private val worker: EphemeralWorker) {
                 worker.setProgressInternal(progressData)
             }
 
+            override fun onNewTargetDirectory(targetDir: String) {
+                var path = targetDir
+                while (path.contains("/")) {
+                    path = path.substringBeforeLast("/")
+                    worker.sendProgressBroadcast(remoteItem.name, path)
+                }
+                worker.sendProgressBroadcast(remoteItem.name, "//" + remoteItem.name)
+            }
+
+            override fun onFileArchived(targetDir: String) {
+                // Single file archive is an intermidiate step so use Progress broadcast type
+                // When all files are archived, onComplete will trigger a Finished broadcast
+                worker.sendProgressBroadcast(remoteItem.name, targetDir)
+            }
+
             override fun onComplete(archived: Int, skipped: Int, failed: Int) {
                 worker.statusObject.manualSuccessCount = archived
                 worker.statusObject.manualSkippedCount = skipped
@@ -92,6 +110,8 @@ class ArchiveTaskRunner(private val worker: EphemeralWorker) {
 
         return try {
             archiveManager.archiveItems(remoteItem, items, granularity)
+            FLog.d(tag(), "handleArchive done, sending broadcast: remote='${remoteItem.name}' path='$sourcePath'")
+            worker.sendActionFinishedBroadcast(remoteItem.name, sourcePath)
             ListenableWorker.Result.success()
         } catch (e: RemoteArchiveManager.ArchiveLimitExceededException) {
             worker.failureReason = EphemeralWorker.FAILURE_REASON.TOO_MANY_FILES
@@ -136,6 +156,8 @@ class ArchiveTaskRunner(private val worker: EphemeralWorker) {
 
         return try {
             uploadArchiveManager.uploadAndArchive(remoteItem, uploadPaths, granularity)
+            val targetPath = inputData.getString("ARCHIVE_TARGET_PATH") ?: ""
+            worker.sendActionFinishedBroadcast(remoteItem.name, targetPath)
             ListenableWorker.Result.success()
         } catch (e: RemoteArchiveManager.ArchiveLimitExceededException) {
             worker.failureReason = EphemeralWorker.FAILURE_REASON.TOO_MANY_FILES
